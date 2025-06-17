@@ -3,16 +3,23 @@
 通用 GoalFy Learning 框架
 用于支持基于多模输入构建、演化与调用任务经验体（ExperiencePack）
 适配场景：营销 / 客服 / 数据分析 / 产品搭建等
-模块结构基于 4 个核心阶段：
-1. 多模输入采集
-2. 知识建构与经验沉淀
-3. 经验体演化与质量更新
-4. 面向任务的经验激活与工作流生成
+模块结构基于 5 个核心智能体阶段：
+1. InitiationAgent - 任务意图判断与目标识别
+2. ObservationAgent - 用户行为观察与操作结构化
+3. ExtractionAgent - 客观知识点抽取（页面/控件/路径）
+4. FusionAgent - 多源知识融合形成统一知识图谱
+5. WorkflowBuilder - 构建任务执行工作流
 """
 
 from typing import List, Dict, Any
 from openai import OpenAI
 from experienceagent.knowledge_graph import KnowledgePoint, ExperienceGraph
+from experienceagent.agents.initiation_agent import InitiationAgent
+from experienceagent.agents.observation_agent import ObservationAgent
+from experienceagent.agents.extraction_agent import ExtractionAgent
+from experienceagent.agents.fusion_agent import FusionAgent
+from experienceagent.fragment_scorer import ExperienceEvaluator ##to be updated 
+from experienceagent.fragment_recommender import ExperienceRetriever ## to be updated 
 import json
 
 client = OpenAI()
@@ -27,6 +34,10 @@ def call_openai(prompt: str) -> str:
     )
     return completion.choices[0].message.content
 
+
+# -----------------------------
+# Core Class Definitions
+# -----------------------------
 class MultiModalInput:
     def __init__(self):
         self.interview_logs: List[str] = []
@@ -72,20 +83,21 @@ class ExperiencePack:
             'fragments': [f.frag_type for f in self.fragments]
         }
 
-    def extract_knowledge_from_fragments(self):
+    def extract_from_fragments(self, types: List[str]) -> List[KnowledgePoint]:
+        points = []
         for frag in self.fragments:
-            if frag.frag_type == "WHY":
-                data = frag.data
-                self.kg.add_kp(KnowledgePoint("GOAL", data.get("goal", ""), "subjective"))
-                self.kg.add_kp(KnowledgePoint("BACKGROUND", data.get("background", ""), "subjective"))
-                for i, c in enumerate(data.get("constraints", [])):
-                    self.kg.add_kp(KnowledgePoint(f"CONSTRAINT_{i}", c, "subjective"))
-                self.kg.add_kp(KnowledgePoint("EXPECTED", data.get("expected_outcome", ""), "subjective"))
-            elif frag.frag_type == "HOW":
-                steps = frag.data.get("steps", [])
-                for i, step in enumerate(steps):
-                    kp = KnowledgePoint(f"STEP_{i}", f"在页面{step['page']}执行{step['action']}于{step['element']}", "objective", url=step['page'])
-                    self.kg.add_kp(kp)
+            if frag.frag_type in types:
+                if frag.frag_type == "WHY":
+                    data = frag.data
+                    points.append(KnowledgePoint("GOAL", data.get("goal", ""), "subjective"))
+                    points.append(KnowledgePoint("BACKGROUND", data.get("background", ""), "subjective"))
+                    for i, c in enumerate(data.get("constraints", [])):
+                        points.append(KnowledgePoint(f"CONSTRAINT_{i}", c, "subjective"))
+                    points.append(KnowledgePoint("EXPECTED", data.get("expected_outcome", ""), "subjective"))
+                elif frag.frag_type == "CHECK":
+                    for i, rule in enumerate(frag.data.get("rules", [])):
+                        points.append(KnowledgePoint(f"RULE_{i}", rule, "rule"))
+        return points
 
 
 class WhyBuilder:
@@ -122,30 +134,6 @@ class WhyBuilder:
         return frag
 
 
-class HowBuilder:
-    @staticmethod
-    def from_behavior(steps: List[Dict]) -> ExperienceFragment:
-        prompt = f"""
-你是一个用户行为结构化助手，请将以下用户行为记录整理为结构化步骤：
-- 页面名称（page）
-- 动作类型（action）
-- 操作元素（element）
-- 意图说明（intent）
-行为记录：
-{steps}
-返回 JSON 数组
-"""
-        try:
-            response = call_openai(prompt)
-            structured = json.loads(response)
-        except:
-            structured = steps
-
-        frag = ExperienceFragment("HOW")
-        frag.data = {"steps": structured}
-        return frag
-
-
 class CheckBuilder:
     @staticmethod
     def from_rules(rules: List[str]) -> ExperienceFragment:
@@ -158,36 +146,9 @@ class CheckBuilder:
             structured = json.loads(response)
         except:
             structured = rules
-
         frag = ExperienceFragment("CHECK")
         frag.data = {"rules": structured}
         return frag
-
-
-class ExperienceEvaluator:
-    @staticmethod
-    def update_trust(ep: ExperiencePack, success: bool, feedback_score: float):
-        delta = 0.1 if success else -0.1
-        ep.trust_score = max(0, min(1.0, ep.trust_score + delta * feedback_score))
-        return ep.trust_score
-
-    @staticmethod
-    def evolve(ep: ExperiencePack, feedback_summary: str):
-        prompt = f"以下是用户反馈，请改进原有经验体：\n{feedback_summary}\n经验体摘要：{ep.summarize()}"
-        updated_info = call_openai(prompt)
-        frag = ExperienceFragment("WHY")
-        frag.data = {"evolution": updated_info}
-        ep.version += 1
-        ep.add_fragment(frag)
-        return ep
-
-
-class ExperienceRetriever:
-    def __init__(self, all_experiences: List[ExperiencePack]):
-        self.repo = all_experiences
-
-    def match_by_task(self, task_query: str) -> List[ExperiencePack]:
-        return [ep for ep in self.repo if task_query in ep.task_name]
 
 
 class WorkflowBuilder:
@@ -200,23 +161,51 @@ class WorkflowBuilder:
         return workflow
 
 
+# -----------------------------
+# Main Goalfy Learning Pipeline
+# -----------------------------
 if __name__ == "__main__":
+    # 1. InitiationAgent 阶段：识别任务意图和构建边界
     input_module = MultiModalInput()
     input_module.ingest_interview("我要做一个618广告活动")
     input_module.ingest_interview("因为活动多且时间紧，想自动化")
     input_module.ingest_interview("预算不能超过500元")
     input_module.record_behavior({"page": "campaign", "action": "click", "element": "#create-btn", "timestamp": "T1"})
 
-    ep = ExperiencePack("营销活动流程自动化")
+    initiation_agent = InitiationAgent()
+    task_name = initiation_agent.infer_task_name(input_module.interview_logs)
+    ep = ExperiencePack(task_name)
+
+    # 2. ObservationAgent 阶段：结构化用户行为轨迹
+    observation_agent = ObservationAgent()
+    structured_behaviors = observation_agent.structure_behavior(input_module.behavior_logs)
+
+    # 3. ExtractionAgent 阶段：抽取客观知识点
+    extraction_agent = ExtractionAgent()
+    extracted_kps = extraction_agent.extract_objective_knowledge(structured_behaviors)
+
+    # 4. WHY + HOW + CHECK 知识片段构建
     ep.add_fragment(WhyBuilder.from_interview(input_module.interview_logs))
-    ep.add_fragment(HowBuilder.from_behavior(input_module.behavior_logs))
     ep.add_fragment(CheckBuilder.from_rules(["budget <= 500"]))
-    ep.extract_knowledge_from_fragments()
+    how_frag = ExperienceFragment("HOW")
+    how_frag.data = {"steps": structured_behaviors}
+    ep.add_fragment(how_frag)
+
+    # 5. FusionAgent 阶段：融合图谱
+    fusion_agent = FusionAgent(ep.kg)
+    why_kps = ep.extract_from_fragments(["WHY"])
+    check_kps = ep.extract_from_fragments(["CHECK"])
+    fusion_agent.fuse_knowledge_fragments([why_kps, extracted_kps, check_kps])
+    fusion_agent.establish_hierarchy({"营销活动": ["填写预算", "创建广告", "选择平台"]})
+
+    # 可视化
     ep.kg.visualize_console()
 
+    # 信任评估与版本演化
     ExperienceEvaluator.update_trust(ep, success=True, feedback_score=1.0)
     ExperienceEvaluator.evolve(ep, feedback_summary="流程中有多余步骤，建议简化")
 
+    # 构建任务执行计划
     matched = ExperienceRetriever([ep]).match_by_task("营销")
     workflow = WorkflowBuilder.build_from_fragments(matched[0].fragments)
     print("[Workflow Execution Plan]", workflow)
