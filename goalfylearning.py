@@ -3,12 +3,13 @@
 通用 GoalFy Learning 框架
 用于支持基于多模输入构建、演化与调用任务经验体（ExperiencePack）
 适配场景：营销 / 客服 / 数据分析 / 产品搭建等
-模块结构基于 5 个核心智能体阶段：
-1. InitiationAgent - 任务意图判断与目标识别
-2. ObservationAgent - 用户行为观察与操作结构化
-3. ExtractionAgent - 客观知识点抽取（页面/控件/路径）
-4. FusionAgent - 多源知识融合形成统一知识图谱
-5. WorkflowBuilder - 构建任务执行工作流
+模块结构基于 6 个核心智能体阶段：
+1. ControllerAgent - 阶段调度与流程判断
+2. InitiationAgent - 任务意图判断与目标识别
+3. ObservationAgent - 用户行为观察与操作结构化
+4. ExtractionAgent - 客观知识点抽取（页面/控件/路径）
+5. FusionAgent - 多源知识融合形成统一知识图谱
+6. WorkflowBuilder - 构建任务执行工作流
 """
 
 from typing import List, Dict, Any
@@ -18,8 +19,9 @@ from experienceagent.agents.initiation_agent import InitiationAgent
 from experienceagent.agents.observation_agent import ObservationAgent
 from experienceagent.agents.extraction_agent import ExtractionAgent
 from experienceagent.agents.fusion_agent import FusionAgent
-from experienceagent.fragment_scorer import ExperienceEvaluator ##to be updated 
-from experienceagent.fragment_recommender import ExperienceRetriever ## to be updated 
+from experienceagent.fragment_scorer import ExperienceEvaluator
+from experienceagent.fragment_recommender import ExperienceRetriever
+from experienceagent.controller_agent import ControllerAgent  # 添加控制器模块
 import json
 
 client = OpenAI()
@@ -165,47 +167,5 @@ class WorkflowBuilder:
 # Main Goalfy Learning Pipeline
 # -----------------------------
 if __name__ == "__main__":
-    # 1. InitiationAgent 阶段：识别任务意图和构建边界
-    input_module = MultiModalInput()
-    input_module.ingest_interview("我要做一个618广告活动")
-    input_module.ingest_interview("因为活动多且时间紧，想自动化")
-    input_module.ingest_interview("预算不能超过500元")
-    input_module.record_behavior({"page": "campaign", "action": "click", "element": "#create-btn", "timestamp": "T1"})
-
-    initiation_agent = InitiationAgent()
-    task_name = initiation_agent.infer_task_name(input_module.interview_logs)
-    ep = ExperiencePack(task_name)
-
-    # 2. ObservationAgent 阶段：结构化用户行为轨迹
-    observation_agent = ObservationAgent()
-    structured_behaviors = observation_agent.structure_behavior(input_module.behavior_logs)
-
-    # 3. ExtractionAgent 阶段：抽取客观知识点
-    extraction_agent = ExtractionAgent()
-    extracted_kps = extraction_agent.extract_objective_knowledge(structured_behaviors)
-
-    # 4. WHY + HOW + CHECK 知识片段构建
-    ep.add_fragment(WhyBuilder.from_interview(input_module.interview_logs))
-    ep.add_fragment(CheckBuilder.from_rules(["budget <= 500"]))
-    how_frag = ExperienceFragment("HOW")
-    how_frag.data = {"steps": structured_behaviors}
-    ep.add_fragment(how_frag)
-
-    # 5. FusionAgent 阶段：融合图谱
-    fusion_agent = FusionAgent(ep.kg)
-    why_kps = ep.extract_from_fragments(["WHY"])
-    check_kps = ep.extract_from_fragments(["CHECK"])
-    fusion_agent.fuse_knowledge_fragments([why_kps, extracted_kps, check_kps])
-    fusion_agent.establish_hierarchy({"营销活动": ["填写预算", "创建广告", "选择平台"]})
-
-    # 可视化
-    ep.kg.visualize_console()
-
-    # 信任评估与版本演化
-    ExperienceEvaluator.update_trust(ep, success=True, feedback_score=1.0)
-    ExperienceEvaluator.evolve(ep, feedback_summary="流程中有多余步骤，建议简化")
-
-    # 构建任务执行计划
-    matched = ExperienceRetriever([ep]).match_by_task("营销")
-    workflow = WorkflowBuilder.build_from_fragments(matched[0].fragments)
-    print("[Workflow Execution Plan]", workflow)
+    controller = ControllerAgent()
+    controller.run_full_pipeline()
