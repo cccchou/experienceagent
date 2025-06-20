@@ -7,18 +7,20 @@ Purpose: Launch the goalfy learning process by confirming the intent, scope, and
 from typing import List, Dict
 from openai import OpenAI
 
-client = OpenAI()
+client = OpenAI(
+        api_key = 'sk-8adcb7b1a1054215b485910737f07205',
+        base_url='https://api.deepseek.com/v1'
+        )
 
-def call_llm(prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+def call_openai(prompt: str) -> str:
+    completion = client.chat.completions.create(
+        model="deepseek-chat",
         messages=[
-            {"role": "system", "content": "You are an experience initiation expert."},
+            {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
-    return response.choices[0].message.content
-
+    return completion.choices[0].message.content
 class InitiationAgent:
     def __init__(self):
         pass

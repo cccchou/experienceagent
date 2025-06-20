@@ -7,18 +7,20 @@ from typing import List, Dict, Any
 import json
 from openai import OpenAI
 
-client = OpenAI()
+client = OpenAI(
+        api_key = 'sk-8adcb7b1a1054215b485910737f07205',
+        base_url='https://api.deepseek.com/v1'
+        )
 
 def call_openai(prompt: str) -> str:
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="deepseek-chat",
         messages=[
-            {"role": "system", "content": "你是结构化助手，请根据行为记录进行结构化。"},
+            {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
     return completion.choices[0].message.content
-
 class ObservationAgent:
     def __init__(self):
         self.raw_logs: List[Dict[str, Any]] = []

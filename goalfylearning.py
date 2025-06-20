@@ -24,18 +24,20 @@ from experienceagent.fragment_recommender import ExperienceRetriever
 from experienceagent.controller_agent import ControllerAgent  # 添加控制器模块
 import json
 
-client = OpenAI()
+client = OpenAI(
+        api_key = 'sk-8adcb7b1a1054215b485910737f07205',
+        base_url='https://api.deepseek.com/v1'
+        )
 
 def call_openai(prompt: str) -> str:
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="deepseek-chat",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
         ]
     )
     return completion.choices[0].message.content
-
 
 # -----------------------------
 # Core Class Definitions
@@ -167,5 +169,24 @@ class WorkflowBuilder:
 # Main Goalfy Learning Pipeline
 # -----------------------------
 if __name__ == "__main__":
+
     controller = ControllerAgent()
-    controller.run_full_pipeline()
+    # 模拟输入数据
+    class MockInput:
+        def __init__(self):
+            self.interview_logs = [
+                "我需要一个自动验证页面的工具",
+                "用于检测页面变化并生成报告"
+            ]
+            self.behavior_logs = [
+                {"action": "click", "element": "button", "time": 1623456789}
+            ]
+    
+    # 执行流程
+    result = controller.run_full_pipeline(MockInput())
+    print(f"执行结果: {result['status']}")
+    
+    # 安全访问字典键
+    final_stage = result.get('final_stage', '未知')
+    print(f"最终阶段: {final_stage}")
+    # controller.run_full_pipeline()
