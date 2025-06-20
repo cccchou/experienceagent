@@ -8,8 +8,6 @@ from typing import List, Dict
 from openai import OpenAI
 
 client = OpenAI(
-        api_key = 'sk-8adcb7b1a1054215b485910737f07205',
-        base_url='https://api.deepseek.com/v1'
         )
 
 def call_openai(prompt: str) -> str:
