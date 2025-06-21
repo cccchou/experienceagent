@@ -1,383 +1,756 @@
 # experienceagent/controller_agent.py
 """
-控制器智能体
-负责整个经验学习流程的调度和执行
+经验智能体控制器
+负责协调经验检索、推荐和学习，匹配shuchu.json格式
 """
 
-from typing import Dict, List, Any, Literal
+import os
+import json
 import logging
-from experienceagent.agents.initiation_agent import InitiationAgent
-from experienceagent.agents.observation_agent import ObservationAgent
-from experienceagent.agents.extraction_agent import ExtractionAgent
-from experienceagent.agents.fusion_agent import FusionAgent
+import time
+from typing import List, Dict, Any, Optional, Union
+from experienceagent.fragment_recommender import ExperienceRetriever, FragmentRecommender
 from experienceagent.fragment_scorer import ExperienceEvaluator
-from experienceagent.fragment_recommender import ExperienceRetriever
-from experienceagent.knowledge_graph import ExperienceGraph
-
-# 导入基础控制器
-from agents.controller_agent import ControllerAgent as BaseController
 
 # 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("ControllerAgent")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("ExperienceAgent")
 
-# 从基础控制器继承Stage类型
-Stage = Literal[
-    "initiation", "observation", "extraction", "fusion", "practice"
-]
 
-class ControllerAgent(BaseController):
-    """
-    经验学习流程控制器
-    继承自基础控制器，增加完整经验学习流程支持
-    """
-    def __init__(self, config: Dict = None):
-        # 初始化基础控制器
-        super().__init__()
-        self.config = config or {}
-        
-        # 创建知识图谱
-        self.knowledge_graph = ExperienceGraph("main_graph")
-        
-        # 初始化子阶段智能体
-        self.initiation_agent = InitiationAgent()
-        self.observation_agent = ObservationAgent()
-        self.extraction_agent = ExtractionAgent(graph=self.knowledge_graph)
-        self.fusion_agent = FusionAgent(graph=self.knowledge_graph)
-        
-        # 初始化评估器和检索器
-        self.evaluator = ExperienceEvaluator()
-        experience_db_path = self.config.get("experience_db_path")
-        self.retriever = ExperienceRetriever(experience_db_path)
-        
-        # 运行时数据
-        self.input_data = None
-        self.experience_pack = None
-        self.execution_log = []
-        self.recommendations = {}
+class ExperienceFragment:
+    """经验片段类，用于统一片段表示"""
     
-    def run_full_pipeline(self, input_data=None):
-        """
-        执行完整的经验学习流程
-        
-        Args:
-            input_data: 输入数据对象
-            
-        Returns:
-            执行结果摘要
-        """
-        self.input_data = input_data
-        if not self.input_data:
-            logger.error("未提供输入数据")
-            return {"status": "failed", "error": "未提供输入数据", "final_stage": self.current_stage}
-            
-        try:
-            # 记录开始状态
-            logger.info("开始执行经验学习流程")
-            self._log_execution("start", {"stage": self.current_stage})
-            
-            # 初始化阶段
-            self._execute_initiation_stage()
-            
-            # 按控制器状态执行后续阶段
-            while self.current_stage != "practice":
-                if self.current_stage == "observation":
-                    self._execute_observation_stage()
-                elif self.current_stage == "extraction":
-                    self._execute_extraction_stage()
-                elif self.current_stage == "fusion":
-                    self._execute_fusion_stage()
-                else:
-                    break  # 不应该到达这里，但为安全起见
-                
-            # 如果执行到实践阶段，则执行
-            if self.current_stage == "practice":
-                self._execute_practice_stage()
-                
-            # 评估经验包质量
-            if self.experience_pack:
-                evaluation = self.evaluator.evaluate_experience_pack(self.experience_pack)
-                self.experience_pack.trust_score = evaluation.get("overall_score", 0.5)
-                
-                # 记录评估结果
-                self._log_execution("evaluation", {
-                    "overall_score": evaluation.get("overall_score", 0),
-                    "suggestions": evaluation.get("suggestions", [])
-                })
-            
-            # 返回执行摘要
-            return {
-                "status": "success",
-                "task_name": getattr(self.experience_pack, "task_name", "未命名任务"),
-                "final_stage": self.current_stage,
-                "trust_score": getattr(self.experience_pack, "trust_score", 0),
-                "stage_history": self.stage_history
-            }
-                
-        except Exception as e:
-            logger.error(f"执行过程中发生错误: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {
-                "status": "error",
-                "error": str(e),
-                "stage": self.current_stage,
-                "final_stage": self.current_stage  # 确保错误情况下也有final_stage键
-            }
+    def __init__(self, frag_type: str, data: Dict):
+        self.frag_type = frag_type
+        self.data = data
     
-    def _execute_initiation_stage(self):
-        """执行初始化阶段"""
-        logger.info("执行初始化阶段")
-        
-        # 改用正确的方法名 - 这里我们假设InitiationAgent有一个process方法
-        # 如果实际方法名不同，请根据InitiationAgent的实际接口修改
-        if hasattr(self.initiation_agent, "process"):
-            task_info = self.initiation_agent.process(self.input_data)
-        else:
-            # 如果没有明确的方法接口，我们创建一个默认的任务信息
-            logger.warning("InitiationAgent接口不匹配，使用默认任务信息")
-            task_info = {"task_name": "未命名任务"}
-        
-        # 创建经验包
-        from experienceagent.goalfylearning import ExperiencePack, WhyBuilder
-        task_name = task_info.get("task_name", "未命名任务")
-        self.experience_pack = ExperiencePack(task_name)
-        
-        # 创建WHY片段
-        if hasattr(self.input_data, "interview_logs") and self.input_data.interview_logs:
-            why_fragment = WhyBuilder.from_interview(self.input_data.interview_logs)
-            self.experience_pack.add_fragment(why_fragment)
-        
-        # 更新控制器上下文，进入下一阶段
-        ctx = {"confirmed": True, "valuable": True}
-        next_stage = self.update_context(ctx)
-        
-        # 记录执行
-        self._log_execution("initiation", {
-            "task_name": task_name,
-            "next_stage": next_stage
-        })
-    
-    def _execute_observation_stage(self):
-        """执行观察阶段"""
-        logger.info("执行观察阶段")
-        
-        # 检查是否有行为日志
-        has_logs = hasattr(self.input_data, "behavior_logs") and self.input_data.behavior_logs
-        
-        if not has_logs:
-            logger.info("无行为日志，跳过观察阶段")
-            ctx = {"logs_complete": True, "within_scope": True}
-            self.update_context(ctx)
-            return
-        
-        # 调用观察智能体 - 确保方法名称正确
-        observations = None
-        if hasattr(self.observation_agent, "observe"):
-            observations = self.observation_agent.observe(self.input_data)
-        else:
-            logger.warning("ObservationAgent接口不匹配")
-        
-        # 创建HOW片段
-        if observations:
-            from experienceagent.goalfylearning import ExperienceFragment
-            how_fragment = ExperienceFragment("HOW")
-            how_fragment.data = {"steps": observations}
-            self.experience_pack.add_fragment(how_fragment)
-        
-        # 更新上下文
-        ctx = {
-            "logs_complete": observations is not None,
-            "within_scope": True
-        }
-        next_stage = self.update_context(ctx)
-        
-        # 记录执行
-        self._log_execution("observation", {
-            "observations_count": len(observations) if observations else 0,
-            "next_stage": next_stage
-        })
-    
-    def _execute_extraction_stage(self):
-        """执行提取阶段"""
-        logger.info("执行提取阶段")
-        
-        # 调用提取智能体 - 确保方法名称正确
-        knowledge_points = None
-        if hasattr(self.extraction_agent, "extract"):
-            knowledge_points = self.extraction_agent.extract(self.input_data)
-        else:
-            logger.warning("ExtractionAgent接口不匹配")
-        
-        # 将知识点添加到经验图谱
-        if knowledge_points:
-            for kp in knowledge_points:
-                self.experience_pack.kg.add_node(kp)
-        
-        # 更新上下文
-        ctx = {"subjective_complete": True}
-        next_stage = self.update_context(ctx)
-        
-        # 记录执行
-        self._log_execution("extraction", {
-            "knowledge_points_count": len(knowledge_points) if knowledge_points else 0,
-            "next_stage": next_stage
-        })
-    
-    def _execute_fusion_stage(self):
-        """执行融合阶段"""
-        logger.info("执行融合阶段")
-        
-        # 检索相似经验
-        similar_experiences = []
-        if hasattr(self.experience_pack, "task_name"):
-            try:
-                results = self.retriever.retrieve_by_task_name(self.experience_pack.task_name)
-                similar_experiences = [r["experience"] for r in results]
-            except Exception as e:
-                logger.error(f"检索相似经验失败: {str(e)}")
-        
-        # 调用融合智能体 - 确保方法名称正确
-        fusion_result = {"success": False}
-        if hasattr(self.fusion_agent, "fuse"):
-            fusion_input = {
-                "experience_pack": self.experience_pack,
-                "similar_experiences": similar_experiences
-            }
-            try:
-                fusion_result = self.fusion_agent.fuse(fusion_input)
-            except Exception as e:
-                logger.error(f"融合失败: {str(e)}")
-        else:
-            logger.warning("FusionAgent接口不匹配")
-        
-        # 推荐校验规则
-        self._recommend_check_rules()
-        
-        # 更新上下文
-        ctx = {"fusion_success": fusion_result.get("success", True)}
-        next_stage = self.update_context(ctx)
-        
-        # 记录执行
-        self._log_execution("fusion", {
-            "fusion_success": fusion_result.get("success", True),
-            "similar_experiences_count": len(similar_experiences),
-            "next_stage": next_stage
-        })
-    
-    def _execute_practice_stage(self):
-        """执行实践阶段"""
-        logger.info("执行实践阶段")
-        
-        # 构建工作流
-        from experienceagent.goalfylearning import WorkflowBuilder
-        workflow = WorkflowBuilder.build_from_fragments(self.experience_pack.fragments)
-        
-        # 更新上下文
-        ctx = {"errors": False}  # 假设没有错误
-        self.update_context(ctx)
-        
-        # 记录执行
-        self._log_execution("practice", {
-            "workflow_steps": len(workflow.get("steps", [])),
-        })
-    
-    def _recommend_check_rules(self):
-        """推荐CHECK规则"""
-        # 检索CHECK类型片段
-        check_fragments = []
-        try:
-            check_fragments = self.retriever.retrieve_by_fragment_type("CHECK")
-        except Exception as e:
-            logger.error(f"检索CHECK片段失败: {str(e)}")
-        
-        if check_fragments:
-            # 简单实现：选择第一个
-            check_frag_data = check_fragments[0]["fragment"].get("data", {})
-            rules = check_frag_data.get("rules", [])
-            
-            if rules:
-                from experienceagent.goalfylearning import CheckBuilder
-                check_fragment = CheckBuilder.from_rules(rules)
-                self.experience_pack.add_fragment(check_fragment)
-                logger.info(f"已添加推荐的校验规则，共 {len(rules)} 条")
-                return
-        
-        # 如果没有找到合适的规则，创建空规则
-        from experienceagent.goalfylearning import CheckBuilder
-        check_fragment = CheckBuilder.from_rules([])
-        self.experience_pack.add_fragment(check_fragment)
-        logger.info("未找到合适校验规则，已添加空规则集")
-    
-    def _log_execution(self, stage: str, data: Dict):
-        """记录执行历史"""
-        import time
-        self.execution_log.append({
-            "stage": stage,
-            "timestamp": time.time(),
-            "data": data
-        })
-    
-    def get_experience_summary(self):
-        """获取经验包摘要"""
-        if not self.experience_pack:
-            return {"status": "未创建经验包"}
-            
+    def to_dict(self) -> Dict:
+        """转换为字典格式，匹配shuchu.json格式"""
         return {
-            "task_name": self.experience_pack.task_name,
-            "trust_score": self.experience_pack.trust_score,
-            "fragments": [f.frag_type for f in self.experience_pack.fragments],
-            "knowledge_points": len(self.experience_pack.kg.get_all_nodes()) if hasattr(self.experience_pack.kg, "get_all_nodes") else 0
+            "type": self.frag_type,
+            "data": self.data
         }
+
+
+class ExperiencePack:
+    """经验包类，用于组织和管理经验，匹配shuchu.json格式"""
     
-    def save_experience(self, path: str = None):
+    def __init__(self, task_name: str):
+        self.task_name = task_name
+        self.fragments = []
+        self.version = 1
+        self.trust_score = 0.5  # 默认信任分数
+        self.workflow_plan = {"steps": []}  # 添加workflow_plan字段
+    
+    def add_fragment(self, fragment: ExperienceFragment):
+        """添加经验片段"""
+        self.fragments.append(fragment)
+        
+        # 如果是HOW类型片段，自动提取步骤更新workflow_plan
+        if fragment.frag_type == "HOW" and "steps" in fragment.data:
+            workflow_steps = []
+            for step in fragment.data["steps"]:
+                if isinstance(step, dict):
+                    action = step.get("action", "")
+                    element = step.get("element", "")
+                    workflow_steps.append(f"{action}{' ' + element if element else ''}")
+                else:
+                    workflow_steps.append(str(step))
+            
+            self.workflow_plan["steps"] = workflow_steps
+    
+    def get_fragment(self, frag_type: str) -> Optional[ExperienceFragment]:
+        """获取特定类型的片段"""
+        for fragment in self.fragments:
+            if fragment.frag_type == frag_type:
+                return fragment
+        return None
+    
+    def has_fragment_type(self, frag_type: str) -> bool:
+        """检查是否有特定类型的片段"""
+        return self.get_fragment(frag_type) is not None
+    
+    def to_dict(self) -> Dict:
+        """转换为字典格式，匹配shuchu.json格式"""
+        return {
+            "task": self.task_name,
+            "version": self.version,
+            "trust_score": self.trust_score,
+            "fragments": [f.to_dict() for f in self.fragments],
+            "workflow_plan": self.workflow_plan
+        }
+
+
+class ControllerAgent:
+    """
+    经验智能体控制器
+    协调经验检索、推荐和学习
+    """
+    
+    def __init__(self, db_path: str = "rich_expert_validation.json"):
         """
-        保存经验到数据库
+        初始化智能体控制器
         
         Args:
-            path: 保存路径（可选）
+            db_path: 经验数据库路径
+        """
+        self.db_path = db_path
+        
+        # 初始化评估器
+        self.evaluator = ExperienceEvaluator()
+        
+        # 初始化检索器和推荐器
+        self.retriever = ExperienceRetriever(db_path, self.evaluator)
+        self.recommender = FragmentRecommender(self.retriever, self.evaluator)
+        
+        # 会话状态
+        self.current_task = None
+        self.current_experience = None
+        self.context_history = []  # 上下文历史
+        self.session_start_time = time.time()
+    
+    def new_session(self, task_name: str = None) -> Dict:
+        """
+        开始新的会话
+        
+        Args:
+            task_name: 任务名称
+        
+        Returns:
+            会话信息
+        """
+        # 保存之前会话的对话历史（如果有）
+        if self.recommender.dialogue_history:
+            self.recommender.save_dialogue_history()
+        
+        # 重置会话状态
+        self.context_history = []
+        self.recommender.dialogue_history = []
+        self.session_start_time = time.time()
+        
+        # 设置新任务
+        if task_name:
+            self.current_task = task_name
+            self.current_experience = ExperiencePack(task_name)
+            message = f"已开始「{task_name}」新会话"
+        else:
+            self.current_task = "未命名任务"
+            self.current_experience = ExperiencePack("未命名任务")
+            message = "已开始新会话"
+        
+        return {
+            "success": True,
+            "message": message,
+            "session_id": str(int(self.session_start_time)),
+            "experience_pack": self.current_experience.to_dict()
+        }
+    
+    def process_user_input(self, user_input: str, task_hint: str = None) -> Dict:
+        """
+        处理用户输入
+        
+        Args:
+            user_input: 用户输入
+            task_hint: 任务提示
             
         Returns:
-            是否保存成功
+            处理结果
         """
-        if not self.experience_pack:
-            logger.error("没有可保存的经验")
-            return False
+        # 记录用户输入到对话历史
+        self.recommender.dialogue_history.append(f"用户: {user_input}")
+        
+        # 添加到上下文历史
+        self.context_history.append({
+            "role": "user",
+            "content": user_input,
+            "timestamp": time.time()
+        })
+        
+        # 如果没有当前任务但有任务提示，设置当前任务
+        if not self.current_task and task_hint:
+            self.current_task = task_hint
+            self.current_experience = ExperiencePack(task_hint)
+        
+        # 根据用户输入寻找相关经验
+        search_query = user_input
+        if task_hint:
+            search_query = f"{task_hint}: {user_input}"
             
-        # 添加到检索器
-        self.retriever.add_experience(self.experience_pack)
+        similar_experiences = self.retriever.semantic_search(
+            search_query, top_k=3
+        )
         
-        # 保存到文件
-        save_path = path or self.config.get("experience_db_path")
-        if save_path:
-            return self.retriever.save_db(save_path)
+        # 准备推荐内容
+        recommendations = {}
+        if similar_experiences:
+            # 处理rich_expert_validation.json格式的经验
+            for exp_item in similar_experiences:
+                exp = exp_item["experience"]
+                
+                # 提取WHY片段
+                if "why_structured" in exp and not self.current_experience.has_fragment_type("WHY"):
+                    if "WHY" not in recommendations:
+                        recommendations["WHY"] = []
+                    
+                    why_data = {
+                        "goal": exp["why_structured"].get("goal", ""),
+                        "background": exp["why_structured"].get("background", ""),
+                        "constraints": exp["why_structured"].get("constraints", []),
+                        "expected_outcome": exp["why_structured"].get("expected_outcome", "")
+                    }
+                    
+                    recommendations["WHY"].append({
+                        "content": why_data,
+                        "similarity": exp_item["similarity"],
+                        "task_name": exp.get("task_title", "未命名任务")
+                    })
+                
+                # 提取HOW片段
+                if "how_behavior_logs" in exp and not self.current_experience.has_fragment_type("HOW"):
+                    if "HOW" not in recommendations:
+                        recommendations["HOW"] = []
+                    
+                    # 转换为shuchu.json的格式
+                    steps = []
+                    for log in exp["how_behavior_logs"]:
+                        if isinstance(log, dict):
+                            steps.append({
+                                "page": log.get("page", ""),
+                                "action": log.get("action", ""),
+                                "element": log.get("element", ""),
+                                "intent": log.get("intent", "")
+                            })
+                    
+                    how_data = {"steps": steps}
+                    
+                    recommendations["HOW"].append({
+                        "content": how_data,
+                        "similarity": exp_item["similarity"],
+                        "task_name": exp.get("task_title", "未命名任务")
+                    })
+                
+                # 提取CHECK片段
+                if "check_rules" in exp and not self.current_experience.has_fragment_type("CHECK"):
+                    if "CHECK" not in recommendations:
+                        recommendations["CHECK"] = []
+                    
+                    check_data = {"rules": exp["check_rules"]}
+                    
+                    recommendations["CHECK"].append({
+                        "content": check_data,
+                        "similarity": exp_item["similarity"],
+                        "task_name": exp.get("task_title", "未命名任务")
+                    })
         
-        return True  # 仅保存在内存中
+        # 记录系统响应到对话历史
+        response = "我找到了一些相关经验，可以帮助你解决问题。"
+        self.recommender.dialogue_history.append(f"系统: {response}")
+        
+        # 转换结果为shuchu.json格式
+        result = {
+            "success": True,
+            "message": response,
+            "recommendations": recommendations,
+            "similar_experiences": [
+                {
+                    "task_name": item["experience"].get("task_title", "未命名任务"),
+                    "similarity": item["similarity"],
+                    "reason": item["reason"]
+                }
+                for item in similar_experiences
+            ],
+            "current_experience": self.current_experience.to_dict() if self.current_experience else None
+        }
+        
+        return result
+    
+    def add_fragment(self, frag_type: str, fragment_data: Dict, user_input: str = None) -> Dict:
+        """
+        添加经验片段
+        
+        Args:
+            frag_type: 片段类型 (WHY, HOW, CHECK)
+            fragment_data: 片段数据
+            user_input: 用户输入上下文
+            
+        Returns:
+            添加结果
+        """
+        # 确保有当前经验
+        if not self.current_experience:
+            self.current_experience = ExperiencePack("未命名任务")
+        
+        # 格式化片段数据，确保符合shuchu.json格式
+        formatted_data = self._format_fragment_data(frag_type, fragment_data)
+        
+        # 创建并添加片段
+        fragment = ExperienceFragment(frag_type, formatted_data)
+        self.current_experience.add_fragment(fragment)
+        
+        # 记录上下文
+        context = f"添加了{frag_type}类型片段"
+        if user_input:
+            context = f"{user_input} -> {context}"
+            # 添加到对话历史
+            self.recommender.dialogue_history.append(f"用户: {user_input}")
+        
+        self.recommender.dialogue_history.append(f"系统: 已添加{frag_type}类型片段到当前经验")
+        
+        # 添加到上下文历史
+        self.context_history.append({
+            "role": "system",
+            "content": f"添加了{frag_type}类型片段",
+            "timestamp": time.time(),
+            "data": {
+                "type": frag_type,
+                "fragment": formatted_data
+            }
+        })
+        
+        return {
+            "success": True,
+            "message": f"已添加{frag_type}类型片段到当前经验",
+            "fragment_type": frag_type,
+            "fragment_count": len(self.current_experience.fragments),
+            "experience_pack": self.current_experience.to_dict()
+        }
+    
+    def _format_fragment_data(self, frag_type: str, data: Dict) -> Dict:
+        """格式化片段数据，确保符合shuchu.json格式"""
+        formatted_data = {}
+        
+        if frag_type == "WHY":
+            formatted_data = {
+                "goal": data.get("goal", ""),
+                "background": data.get("background", ""),
+                "constraints": data.get("constraints", []),
+                "expected_outcome": data.get("expected_outcome", "")
+            }
+        elif frag_type == "HOW":
+            # 确保HOW片段有steps字段，且格式正确
+            steps = data.get("steps", [])
+            formatted_steps = []
+            
+            for step in steps:
+                if isinstance(step, dict):
+                    formatted_step = {
+                        "page": step.get("page", step.get("target", "")),
+                        "action": step.get("action", ""),
+                        "element": step.get("element", step.get("target", "")),
+                        "intent": step.get("intent", step.get("description", ""))
+                    }
+                    formatted_steps.append(formatted_step)
+                else:
+                    # 如果是字符串，尝试拆分为动作和元素
+                    parts = str(step).split(" ", 1)
+                    if len(parts) > 1:
+                        formatted_steps.append({
+                            "page": "",
+                            "action": parts[0],
+                            "element": parts[1],
+                            "intent": ""
+                        })
+                    else:
+                        formatted_steps.append({
+                            "page": "",
+                            "action": str(step),
+                            "element": "",
+                            "intent": ""
+                        })
+            
+            formatted_data["steps"] = formatted_steps
+        elif frag_type == "CHECK":
+            # 确保CHECK片段有rules字段
+            if "rules" in data:
+                formatted_data["rules"] = data["rules"]
+            else:
+                formatted_data["rules"] = [str(rule) for rule in data.values()] if isinstance(data, dict) else [str(data)]
+        else:
+            # 其他类型直接使用原始数据
+            formatted_data = data
+        
+        return formatted_data
+    
+    def save_current_experience(self, task_name: str = None, context: str = None) -> Dict:
+        """
+        保存当前经验
+        
+        Args:
+            task_name: 任务名称
+            context: 上下文描述
+            
+        Returns:
+            保存结果
+        """
+        if not self.current_experience:
+            return {
+                "success": False,
+                "message": "当前没有活动的经验可保存",
+                "experience_pack": None
+            }
+        
+        # 更新任务名称
+        if task_name:
+            self.current_experience.task_name = task_name
+        
+        # 准备上下文
+        if not context:
+            # 如果没有提供上下文，使用对话历史或摘要
+            if self.recommender.dialogue_history:
+                # 仅使用对话历史中的前两轮和后两轮对话作为上下文摘要
+                history = self.recommender.dialogue_history
+                if len(history) > 4:
+                    context_parts = history[:2] + ["..."] + history[-2:]
+                    context = "\n".join(context_parts)
+                else:
+                    context = "\n".join(history)
+            else:
+                context = f"保存关于「{self.current_experience.task_name}」的经验"
+        
+        # 保存经验
+        result = self.recommender.learn_from_experience(self.current_experience, context)
+        
+        # 添加到对话历史
+        self.recommender.dialogue_history.append(f"系统: 已保存「{self.current_experience.task_name}」经验")
+        
+        # 添加到上下文历史
+        self.context_history.append({
+            "role": "system",
+            "content": f"保存了「{self.current_experience.task_name}」经验",
+            "timestamp": time.time()
+        })
+        
+        experience_dict = self.current_experience.to_dict()
+        
+        return {
+            "success": result["success"],
+            "message": result["message"],
+            "task_name": self.current_experience.task_name,
+            "fragment_count": len(self.current_experience.fragments),
+            "experience_pack": experience_dict
+        }
+    
+    def recommend_fragments(self, task_description: str, user_input: str = None) -> Dict:
+        """
+        推荐经验片段
+        
+        Args:
+            task_description: 任务描述
+            user_input: 用户输入上下文
+            
+        Returns:
+            推荐结果
+        """
+        # 准备上下文
+        dialog_context = user_input if user_input else f"寻找与{task_description}相关的经验"
+        
+        # 添加到对话历史
+        if user_input:
+            self.recommender.dialogue_history.append(f"用户: {user_input}")
+        self.recommender.dialogue_history.append(f"系统: 正在查找与「{task_description}」相关的经验")
+        
+        # 获取推荐
+        existing_fragments = self.current_experience.fragments if self.current_experience else []
+        recommendations = self.recommender.recommend_for_task(
+            task_description, existing_fragments, dialog_context
+        )
+        
+        # 处理推荐结果，确保符合shuchu.json格式
+        result_by_type = {}
+        for frag_type, items in recommendations.items():
+            if items:
+                result_by_type[frag_type] = []
+                for item in items:
+                    # 格式化内容以符合shuchu.json
+                    formatted_content = self._format_fragment_data(
+                        frag_type, item["fragment"]["data"]
+                    )
+                    
+                    result_by_type[frag_type].append({
+                        "content": formatted_content,
+                        "task_name": item["task_name"],
+                        "similarity": item["similarity"]
+                    })
+        
+        return {
+            "success": True,
+            "task_description": task_description,
+            "recommendations": result_by_type,
+            "has_recommendations": bool(result_by_type),
+            "current_experience": self.current_experience.to_dict() if self.current_experience else None
+        }
+    
+    def enhance_experience(self, user_input: str = None) -> Dict:
+        """
+        增强当前经验
+        
+        Args:
+            user_input: 用户输入上下文
+            
+        Returns:
+            增强建议
+        """
+        if not self.current_experience:
+            return {
+                "success": False,
+                "message": "当前没有活动的经验可增强",
+                "experience_pack": None
+            }
+        
+        # 准备上下文
+        dialog_context = user_input if user_input else f"增强「{self.current_experience.task_name}」经验"
+        
+        # 添加到对话历史
+        if user_input:
+            self.recommender.dialogue_history.append(f"用户: {user_input}")
+        self.recommender.dialogue_history.append(f"系统: 正在分析如何增强当前经验")
+        
+        # 获取增强建议
+        enhance_result = self.recommender.enhance_experience(self.current_experience, dialog_context)
+        
+        # 处理补充推荐，确保符合shuchu.json格式
+        complementary_formatted = {}
+        for frag_type, items in enhance_result.get("complementary_recommendations", {}).items():
+            if items:
+                complementary_formatted[frag_type] = []
+                for item in items:
+                    # 格式化内容以符合shuchu.json
+                    formatted_content = self._format_fragment_data(
+                        frag_type, item["fragment"]["data"]
+                    )
+                    
+                    complementary_formatted[frag_type].append({
+                        "content": formatted_content,
+                        "task_name": item["task_name"],
+                        "similarity": item["similarity"]
+                    })
+        
+        return {
+            "success": enhance_result["success"],
+            "quality_level": enhance_result.get("quality_level", "未知"),
+            "missing_types": enhance_result.get("missing_types", []),
+            "suggestions": enhance_result.get("enhancement_suggestions", []),
+            "has_enhancement_potential": enhance_result.get("has_enhancement_potential", False),
+            "complementary_recommendations": complementary_formatted,
+            "experience_pack": self.current_experience.to_dict()
+        }
+    
+    def update_workflow_plan(self, steps: List[str]) -> Dict:
+        """
+        更新工作流计划
+        
+        Args:
+            steps: 工作流步骤列表
+            
+        Returns:
+            更新结果
+        """
+        if not self.current_experience:
+            return {
+                "success": False,
+                "message": "当前没有活动的经验可更新工作流",
+                "experience_pack": None
+            }
+        
+        # 更新工作流计划
+        self.current_experience.workflow_plan = {"steps": steps}
+        
+        # 记录更新
+        self.recommender.dialogue_history.append(f"系统: 已更新工作流计划，共{len(steps)}个步骤")
+        
+        return {
+            "success": True,
+            "message": f"已更新工作流计划，共{len(steps)}个步骤",
+            "workflow_steps": steps,
+            "experience_pack": self.current_experience.to_dict()
+        }
+    
+    def get_session_summary(self) -> Dict:
+        """
+        获取当前会话摘要
+        
+        Returns:
+            会话摘要
+        """
+        session_duration = time.time() - self.session_start_time
+        
+        # 统计各类片段数量
+        fragment_counts = {}
+        if self.current_experience:
+            for fragment in self.current_experience.fragments:
+                frag_type = fragment.frag_type
+                if frag_type not in fragment_counts:
+                    fragment_counts[frag_type] = 0
+                fragment_counts[frag_type] += 1
+        
+        return {
+            "session_id": str(int(self.session_start_time)),
+            "task": self.current_task or "未命名任务",
+            "duration_seconds": int(session_duration),
+            "context_history_length": len(self.context_history),
+            "dialogue_history_length": len(self.recommender.dialogue_history),
+            "current_experience": self.current_experience.to_dict() if self.current_experience else None
+        }
+    def save_to_file(self, file_path: str = "shuchu1.json") -> Dict:
+        """
+        将当前经验包保存到指定的JSON文件
+
+        Args:
+            file_path: 保存的文件路径，默认为shuchu.json
+            
+        Returns:
+            保存结果
+        """
+        if not self.current_experience:
+            return {
+                "success": False,
+                "message": "当前没有活动的经验可保存",
+                "file_path": None
+            }
+
+        try:
+            # 获取完整的经验包数据
+            experience_dict = self.current_experience.to_dict()
+            
+            # 写入文件
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(experience_dict, f, ensure_ascii=False, indent=2)
+            
+            return {
+                "success": True,
+                "message": f"已将经验包保存到 {file_path}",
+                "file_path": file_path,
+                "experience_pack": experience_dict
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"保存到文件失败: {str(e)}",
+                "file_path": file_path,
+                "error": str(e)
+            }
+    
+    def save_session(self) -> Dict:
+        """
+        保存当前会话
+        
+        Returns:
+            保存结果
+        """
+        # 保存当前经验
+        if self.current_experience and self.current_experience.fragments:
+            # 保存到数据库
+            save_result = self.save_current_experience()
+            experience_saved = save_result["success"]
+            experience_pack = save_result.get("experience_pack")
+            
+            # 额外保存到shuchu.json
+            save_file_result = self.save_to_file()
+            file_saved = save_file_result["success"]
+        else:
+            experience_saved = False
+            experience_pack = None
+            file_saved = False
+        
+        # 保存对话历史
+        if self.recommender.dialogue_history:
+            dialogue_saved = self.recommender.save_dialogue_history()
+        else:
+            dialogue_saved = False
+        
+        return {
+            "success": experience_saved or dialogue_saved or file_saved,
+            "experience_saved": experience_saved,
+            "dialogue_saved": dialogue_saved,
+            "file_saved": file_saved,
+            "message": "会话已保存",
+            "session_summary": self.get_session_summary(),
+            "experience_pack": experience_pack
+        }
+    
+    def export_experience(self, format_type: str = "json") -> Dict:
+        """
+        导出当前经验
+        
+        Args:
+            format_type: 导出格式 (json, dict)
+            
+        Returns:
+            导出的经验
+        """
+        if not self.current_experience:
+            return {
+                "success": False,
+                "message": "当前没有活动的经验可导出",
+                "data": None
+            }
+        
+        # 转换为标准shuchu.json格式
+        experience_dict = self.current_experience.to_dict()
+        
+        if format_type == "json":
+            try:
+                data = json.dumps(experience_dict, ensure_ascii=False, indent=2)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"导出JSON格式失败: {str(e)}",
+                    "data": None
+                }
+        else:
+            data = experience_dict
+        
+        return {
+            "success": True,
+            "message": f"已导出{format_type}格式经验",
+            "data": data,
+            "experience_pack": experience_dict
+        }
 
 
 # 示例用法
 if __name__ == "__main__":
-    # 测试控制器
-    controller = ControllerAgent()
+    # 初始化智能体控制器
+    agent = ControllerAgent("rich_expert_validation.json")
     
-    # 模拟输入数据
-    class MockInput:
-        def __init__(self):
-            self.interview_logs = [
-                "我需要一个自动验证页面的工具",
-                "用于检测页面变化并生成报告"
-            ]
-            self.behavior_logs = [
-                {"action": "click", "element": "button", "time": 1623456789}
-            ]
+    # 开始新会话
+    session = agent.new_session("网页自动化测试项目")
+    print(f"会话开始: {session['message']}")
     
-    # 执行流程
-    result = controller.run_full_pipeline(MockInput())
-    print(f"执行结果: {result['status']}")
+    # 添加WHY片段
+    agent.add_fragment("WHY", {
+        "goal": "建立网页界面自动验证系统",
+        "background": "在大促活动中页面频繁变化需要快速验证",
+        "constraints": ["必须基于现有HTML结构", "要有审计日志功能"],
+        "expected_outcome": "能自动检测并报告页面关键元素变化"
+    })
     
-    # 安全访问字典键
-    final_stage = result.get('final_stage', '未知')
-    print(f"最终阶段: {final_stage}")
+    # 添加HOW片段
+    agent.add_fragment("HOW", {
+        "steps": [
+            {"page": "元素抽取页", "action": "点击", "element": "结构化提取按钮", "intent": "提取页面HTML中的元素信息"},
+            {"page": "验证页", "action": "填写", "element": "测试数据输入框", "intent": "填写拟合后的页面参数进行验证"},
+            {"page": "验证页", "action": "点击", "element": "开始验证按钮", "intent": "执行自动回放流程"}
+        ]
+    })
+    
+    # 添加CHECK片段
+    agent.add_fragment("CHECK", {
+        "rules": [
+            "每个页面元素必须具备唯一定位属性",
+            "页面的结构变化必须在统计配置项中显式声明",
+            "执行路径需含验证步骤，输出结果包含status/msg字段"
+        ]
+    })
+    
+    # 导出经验为JSON
+    result = agent.export_experience()
+    print("\n导出的经验包:")
+    print(result["data"])
+    
+    # 处理用户输入
+    agent.process_user_input("我需要一个系统来验证网页界面的变化")
+    
+    # 保存会话
+    save_result = agent.save_session()
+    print(f"\n保存会话结果: {save_result['message']}")

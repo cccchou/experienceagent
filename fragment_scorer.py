@@ -8,24 +8,71 @@ from openai import OpenAI
 import json
 import logging
 from experienceagent.knowledge_graph import KnowledgePoint, ExperienceGraph
+import re
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ExperienceEvaluator")
 
 client = OpenAI(
-        )
+)
 
-def call_openai(prompt: str) -> str:
+def call_openai(prompt: str, system_prompt: str = None, model: str = "deepseek-chat") -> str:
+    """调用OpenAI API获取结果"""
+    if system_prompt is None:
+        system_prompt = "你是一个经验推荐专家，请根据用户需求推荐最相关的经验片段。"
+        
     completion = client.chat.completions.create(
-        model="deepseek-chat",
+        model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ]
     )
     return completion.choices[0].message.content
 
+
+# 添加JSON提取函数
+def extract_json_from_text(text: str) -> str:
+    """尝试从文本中提取JSON部分"""
+    # 尝试查找JSON对象格式，通常是 { 开头，} 结尾
+    json_object_match = re.search(r'\{(.*?)\}', text, re.DOTALL)
+    if json_object_match:
+        potential_json = f"{{{json_object_match.group(1)}}}"
+        try:
+            # 验证是否是有效的JSON
+            json.loads(potential_json)
+            return potential_json
+        except:
+            pass
+    
+    # 尝试查找JSON数组格式，通常是 [ 开头，] 结尾
+    json_array_match = re.search(r'\[(.*?)\]', text, re.DOTALL)
+    if json_array_match:
+        potential_json = f"[{json_array_match.group(1)}]"
+        try:
+            # 验证是否是有效的JSON
+            json.loads(potential_json)
+            return potential_json
+        except:
+            pass
+    
+    # 尝试查找整个文本中的JSON对象
+    try:
+        # 查找可能的JSON起始和结束
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
+        
+        if start_idx != -1 and end_idx != -1:
+            potential_json = text[start_idx:end_idx+1]
+            # 验证是否是有效的JSON
+            json.loads(potential_json)
+            return potential_json
+    except:
+        pass
+    
+    # 如果没有找到有效的JSON，返回原始文本
+    return text
 
 class ExperienceEvaluator:
     """
@@ -193,6 +240,7 @@ class ExperienceEvaluator:
 """
                     try:
                         response = call_openai(prompt)
+                        response = extract_json_from_text(response)
                         matches = json.loads(response)
                         
                         # 构建结果
@@ -262,6 +310,7 @@ class ExperienceEvaluator:
         
         try:
             response = call_openai(prompt)
+            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -374,6 +423,7 @@ class ExperienceEvaluator:
         
         try:
             response = call_openai(prompt)
+            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -474,6 +524,7 @@ class ExperienceEvaluator:
         
         try:
             response = call_openai(prompt)
+            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -552,6 +603,7 @@ class ExperienceEvaluator:
         
         try:
             response = call_openai(prompt)
+            response = extract_json_from_text(response)
             result = json.loads(response)
             
             # 提取评分和反馈
@@ -674,6 +726,7 @@ class ExperienceEvaluator:
 }}
 """
                 response = call_openai(summary_prompt)
+                response = extract_json_from_text(response)
                 summary_result = json.loads(response)
                 
                 # 整合最终结果
