@@ -1,10 +1,8 @@
-```markdown name=README.md
-# ExperienceAgent
-
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Python](https://img.shields.io/badge/python-3.8%2B-green.svg)
-
-ExperienceAgent 是一个智能经验检索与推荐系统，结合经验库的知识与 GPT 模型的生成能力，为用户提供高质量的经验片段推荐。当经验库中没有相关内容时，系统会自动通过 GPT 生成最佳答案，并将新知识添加回经验库中，实现持续学习和成长。
+# 🧠 ExperienceAgent: GoalFy Learning Framework
+---
+A modular Python framework for building, evolving, and deploying **task-oriented experiential agents**. 
+It focuses on turning user behavior, interviews, and system interactions into structured, reusable, and evaluable knowledge units called **Experience Packs**.
+---
 
 ## 💡 主要特点
 
