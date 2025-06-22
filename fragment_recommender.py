@@ -1,7 +1,8 @@
 # experienceagent/fragment_recommender.py
 """
 经验片段推荐系统
-适配rich_expert_validation.json格式，处理直接的经验结构
+适配rich_expert_validation.json格式
+添加GPT生成补充功能，当经验库没有相关内容时自动生成
 """
 
 from typing import List, Dict, Any, Optional, Tuple, Union
@@ -34,6 +35,8 @@ def call_openai(prompt: str, system_prompt: str = None, model: str = "deepseek-c
         ]
     )
     return completion.choices[0].message.content
+
+
 def extract_json_from_text(text: str) -> str:
     """尝试从文本中提取JSON部分"""
     # 尝试查找JSON数组格式，通常是 [ 开头，] 结尾
@@ -47,9 +50,33 @@ def extract_json_from_text(text: str) -> str:
         except:
             pass
     
+    # 尝试查找JSON对象格式，通常是 { 开头，} 结尾
+    json_object_match = re.search(r'\{(.*?)\}', text, re.DOTALL)
+    if json_object_match:
+        potential_json = f"{{{json_object_match.group(1)}}}"
+        try:
+            # 验证是否是有效的JSON
+            json.loads(potential_json)
+            return potential_json
+        except:
+            pass
+    
     # 尝试查找整个文本中的JSON对象
     try:
         # 查找可能的JSON起始
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
+        
+        if start_idx != -1 and end_idx != -1:
+            potential_json = text[start_idx:end_idx+1]
+            # 验证是否是有效的JSON
+            json.loads(potential_json)
+            return potential_json
+    except:
+        pass
+    
+    # 查找数组格式
+    try:
         start_idx = text.find("[")
         end_idx = text.rfind("]")
         
@@ -63,10 +90,6 @@ def extract_json_from_text(text: str) -> str:
     
     # 如果没有找到有效的JSON，返回原始文本
     return text
-
-
-
-
 
 
 # 定义经验类型映射
@@ -227,10 +250,10 @@ class ExperienceRetriever:
                     for step in fragment.data["steps"]:
                         if isinstance(step, dict):
                             behavior_log = {
-                                "page": step.get("target", "未指定页面"),
+                                "page": step.get("page", "未指定页面"),
                                 "action": step.get("action", "执行"),
-                                "element": step.get("target", "未指定元素"),
-                                "intent": step.get("description", "未指定意图")
+                                "element": step.get("element", "未指定元素"),
+                                "intent": step.get("description", step.get("intent", "未指定意图"))
                             }
                             behavior_logs.append(behavior_log)
                     exp_data["how_behavior_logs"] = behavior_logs
@@ -633,9 +656,10 @@ class FragmentRecommender:
     """
     经验片段推荐器
     基于经验库提供智能推荐功能，并记录客户交互
+    增加AI生成推荐功能
     """
     def __init__(self, retriever: ExperienceRetriever = None, evaluator: ExperienceEvaluator = None,
-                db_path: str = None):
+                db_path: str = None, min_recommendations: int = 2, min_similarity: float = 0.4):
         """
         初始化推荐器
         
@@ -643,6 +667,8 @@ class FragmentRecommender:
             retriever: 经验检索器
             evaluator: 评分器
             db_path: 数据库路径
+            min_recommendations: 最少推荐数量
+            min_similarity: 最低相似度阈值
         """
         # 优先使用传入的检索器
         if retriever:
@@ -654,11 +680,16 @@ class FragmentRecommender:
             
         self.evaluator = evaluator
         self.dialogue_history = []  # 记录对话历史
+        
+        # 推荐阈值设置
+        self.min_recommendations = min_recommendations  # 每种类型最少推荐数量
+        self.min_similarity = min_similarity  # 最低相似度阈值
     
     def recommend_for_task(self, task_description: str, existing_fragments: List = None, 
                           dialog_context: str = None) -> Dict[str, List]:
         """
         基于任务描述推荐经验片段
+        如果经验库中没有足够相关内容，自动生成推荐
         
         Args:
             task_description: 任务描述
@@ -692,7 +723,7 @@ class FragmentRecommender:
             similarity = item["similarity"]
             
             # 跳过低相似度的结果
-            if similarity < 0.3:
+            if similarity < self.min_similarity:
                 continue
                 
             # 获取任务名称
@@ -714,7 +745,8 @@ class FragmentRecommender:
                             "data": exp["why_structured"]
                         },
                         "task_name": task_name,
-                        "similarity": similarity
+                        "similarity": similarity,
+                        "source": "database"  # 标记来源为数据库
                     })
                     fragment_sources["WHY"].add(task_name)
                     
@@ -731,7 +763,8 @@ class FragmentRecommender:
                             "data": {"steps": exp["how_behavior_logs"]}
                         },
                         "task_name": task_name,
-                        "similarity": similarity
+                        "similarity": similarity,
+                        "source": "database"  # 标记来源为数据库
                     })
                     fragment_sources["HOW"].add(task_name)
                     
@@ -748,7 +781,8 @@ class FragmentRecommender:
                             "data": {"rules": exp["check_rules"]}
                         },
                         "task_name": task_name,
-                        "similarity": similarity
+                        "similarity": similarity,
+                        "source": "database"  # 标记来源为数据库
                     })
                     fragment_sources["CHECK"].add(task_name)
                     
@@ -771,7 +805,8 @@ class FragmentRecommender:
                         recommendations[frag_type].append({
                             "fragment": fragment,
                             "task_name": task_name,
-                            "similarity": similarity
+                            "similarity": similarity,
+                            "source": "database"  # 标记来源为数据库
                         })
                         fragment_sources[frag_type].add(task_name)
         
@@ -782,7 +817,203 @@ class FragmentRecommender:
                 reverse=True
             )
             
+        # 检查是否需要AI生成补充推荐
+        needed_types = ["WHY", "HOW", "CHECK"]
+        for frag_type in needed_types:
+            # 跳过已有的片段类型
+            if frag_type in existing_types:
+                continue
+                
+            # 如果某种类型的推荐不足，使用AI生成补充
+            if frag_type not in recommendations or len(recommendations[frag_type]) < self.min_recommendations:
+                generated_fragments = self._generate_fragment(task_description, frag_type, dialog_context)
+                
+                if generated_fragments:
+                    # 确保推荐列表已初始化
+                    if frag_type not in recommendations:
+                        recommendations[frag_type] = []
+                    
+                    # 添加生成的片段
+                    for gen_fragment in generated_fragments:
+                        recommendations[frag_type].append(gen_fragment)
+                    
+                    # 重新排序
+                    recommendations[frag_type].sort(
+                        key=lambda x: x["similarity"],
+                        reverse=True
+                    )
+                    
+                    # 保存生成的片段到经验库
+                    for gen_fragment in generated_fragments:
+                        # 创建一个模拟经验包
+                        from experienceagent.controller_agent import ExperiencePack, ExperienceFragment
+                        exp_pack = ExperiencePack(f"AI生成: {task_description}")
+                        exp_fragment = ExperienceFragment(frag_type, gen_fragment["fragment"]["data"])
+                        exp_pack.add_fragment(exp_fragment)
+                        
+                        # 添加到经验库
+                        context = f"AI为查询「{task_description}」生成的{frag_type}片段"
+                        if dialog_context:
+                            context = f"{dialog_context} -> {context}"
+                            
+                        self.retriever.add_experience(exp_pack, context)
+                        logger.info(f"已将AI生成的{frag_type}片段添加到经验库")
+            
         return recommendations
+    
+    def _generate_fragment(self, task_description: str, frag_type: str, 
+                          dialog_context: str = None) -> List[Dict]:
+        """
+        使用AI生成特定类型的片段
+        
+        Args:
+            task_description: 任务描述
+            frag_type: 片段类型
+            dialog_context: 对话上下文
+            
+        Returns:
+            生成的片段列表
+        """
+        logger.info(f"为任务「{task_description}」生成{frag_type}片段")
+        
+        # 构建系统提示
+        system_prompt = f"你是一个专业的{frag_type}经验生成专家，基于用户需求生成高质量的经验片段。"
+        
+        # 构建上下文
+        context = f"任务: {task_description}\n"
+        if dialog_context:
+            context += f"对话上下文: {dialog_context}\n"
+            
+        # 根据片段类型构建不同的提示
+        if frag_type == "WHY":
+            prompt = f"""
+{context}
+
+请为以上任务生成一个完整的WHY经验片段，包含以下结构：
+1. 目标 (goal)：明确的任务目标
+2. 背景 (background)：任务的背景和原因
+3. 约束条件 (constraints)：需要考虑的限制和条件，以数组形式提供
+4. 预期效果 (expected_outcome)：完成任务后的预期结果
+
+请以严格的JSON格式返回，格式如下：
+{{
+  "goal": "...",
+  "background": "...",
+  "constraints": ["约束1", "约束2", ...],
+  "expected_outcome": "..."
+}}
+
+请确保返回的是可解析的标准JSON格式，不要添加额外的文本或说明。
+"""
+        elif frag_type == "HOW":
+            prompt = f"""
+{context}
+
+请为以上任务生成一个完整的HOW经验片段，描述具体的实现步骤，每个步骤包含以下结构：
+- page: 在哪个页面/环境进行操作
+- action: 执行什么动作
+- element: 操作的对象/元素
+- intent: 该步骤的目的
+
+请以严格的JSON格式返回，格式如下：
+{{
+  "steps": [
+    {{
+      "page": "...",
+      "action": "...",
+      "element": "...",
+      "intent": "..."
+    }},
+    ...
+  ]
+}}
+
+请生成3-5个详细步骤，确保返回的是可解析的标准JSON格式，不要添加额外的文本或说明。
+"""
+        elif frag_type == "CHECK":
+            prompt = f"""
+{context}
+
+请为以上任务生成一个完整的CHECK经验片段，提供验证规则和检查点，格式如下：
+{{
+  "rules": [
+    "验证规则1",
+    "验证规则2",
+    ...
+  ]
+}}
+
+请生成3-5个关键验证规则，确保返回的是可解析的标准JSON格式，不要添加额外的文本或说明。
+"""
+        else:
+            # 其他类型
+            prompt = f"""
+{context}
+
+请为以上任务生成一个{frag_type}经验片段，包含相关内容。请以严格的JSON格式返回，确保可以被程序解析。
+"""
+            
+        try:
+            # 调用模型
+            response = call_openai(prompt, system_prompt)
+            logger.debug(f"模型原始响应: {response}")
+            
+            # 提取JSON
+            json_str = extract_json_from_text(response)
+            
+            try:
+                # 解析JSON
+                fragment_data = json.loads(json_str)
+                
+                # 确保数据有正确的结构
+                if frag_type == "WHY":
+                    # 确保WHY有必要的字段
+                    if not isinstance(fragment_data, dict):
+                        fragment_data = {
+                            "goal": task_description,
+                            "background": "",
+                            "constraints": [],
+                            "expected_outcome": ""
+                        }
+                    elif "goal" not in fragment_data:
+                        fragment_data["goal"] = task_description
+                    if "constraints" not in fragment_data or not isinstance(fragment_data["constraints"], list):
+                        fragment_data["constraints"] = []
+                elif frag_type == "HOW":
+                    # 确保HOW有steps字段
+                    if not isinstance(fragment_data, dict) or "steps" not in fragment_data:
+                        fragment_data = {"steps": []}
+                    # 确保steps是列表
+                    if not isinstance(fragment_data["steps"], list):
+                        fragment_data["steps"] = []
+                elif frag_type == "CHECK":
+                    # 确保CHECK有rules字段
+                    if not isinstance(fragment_data, dict) or "rules" not in fragment_data:
+                        fragment_data = {"rules": []}
+                    # 确保rules是列表
+                    if not isinstance(fragment_data["rules"], list):
+                        fragment_data["rules"] = []
+                
+                # 创建生成结果
+                generated_result = [{
+                    "fragment": {
+                        "type": frag_type,
+                        "data": fragment_data
+                    },
+                    "task_name": f"AI生成: {task_description}",
+                    "similarity": 0.85,  # 给生成内容一个较高的初始相似度
+                    "source": "ai_generated"  # 标记来源为AI生成
+                }]
+                
+                return generated_result
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"解析生成的JSON失败: {str(e)}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"生成{frag_type}片段失败: {str(e)}")
+            return []
     
     def enhance_experience(self, experience_pack, dialog_context: str = None) -> Dict[str, Any]:
         """
@@ -853,7 +1084,7 @@ class FragmentRecommender:
                     task_description += f" {fragment.data['goal']}"
                     break
             
-            # 获取推荐
+            # 获取推荐（会自动补充生成）
             recommendations = self.recommend_for_task(task_description, experience_pack.fragments)
             complementary_recommendations = recommendations
         
@@ -968,6 +1199,7 @@ if __name__ == "__main__":
         for item in items[:2]:  # 只显示前2个
             print(f"- 任务: {item['task_name']}")
             print(f"  相似度: {item['similarity']:.2f}")
+            print(f"  来源: {'AI生成' if item.get('source') == 'ai_generated' else '经验库'}")
     
     # 测试学习功能
     from experienceagent.fragment_scorer import ExperienceEvaluator

@@ -1,63 +1,33 @@
 {
-    "task": "营销页面验证经验建构",
-    "version": 1,
-    "trust_score": 0.50,
-    "fragments": [
-      {
-        "type": "WHY",
-        "data": {
-          "goal": "建立一套可用于页面变化验证与行为分析的营销页面经验框架",
-          "background": "在大促场景中，页面元素频繁变化，测试覆盖不全影响活动上线",
-          "constraints": [
-            "必须基于已有的页面HTML结构",
-            "需兼容不同终端结构",
-            "验证用例要可追溯"
-          ],
-          "expected_outcome": "能自动抽取页面元素变化并生成可验证用例"
-        }
-      },
-      {
-        "type": "HOW",
-        "data": {
-          "steps": [
-            {
-              "page": "元素抽取页",
-              "action": "点击",
-              "element": "结构化提取按钮",
-              "intent": "提取页面HTML中的元素信息"
-            },
-            {
-              "page": "验证页",
-              "action": "填写",
-              "element": "测试数据输入框",
-              "intent": "填写拟合后的页面参数进行验证"
-            },
-            {
-              "page": "验证页",
-              "action": "点击",
-              "element": "开始验证按钮",
-              "intent": "执行自动回放流程"
-            }
-          ]
-        }
-      },
-      {
-        "type": "CHECK",
-        "data": {
-          "rules": [
-            "每个页面元素必须具备唯一定位属性",
-            "页面的结构变化必须在统计配置项中显式声明",
-            "执行路径需含验证步骤，输出结果包含status/msg字段"
-          ]
-        }
+  "task": "创建一个网站",
+  "version": 1,
+  "trust_score": 0.5,
+  "fragments": [
+    {
+      "type": "WHY",
+      "data": {
+        "goal": "创建一个网站",
+        "background": "",
+        "constraints": [
+          "响应快在线人数多"
+        ],
+        "expected_outcome": ""
       }
-    ],
-    "workflow_plan": {
-      "steps": [
-        "点击结构化提取按钮",
-        "填写测试数据输入框",
-        "点击开始验证按钮"
-      ]
+    },
+    {
+      "type": "HOW",
+      "data": {
+        "steps": []
+      }
+    },
+    {
+      "type": "CHECK",
+      "data": {
+        "rules": []
+      }
     }
+  ],
+  "workflow_plan": {
+    "steps": []
   }
-  
+}

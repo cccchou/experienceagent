@@ -1,119 +1,205 @@
-# 🧠 ExperienceAgent: GoalFy Learning Framework
+```markdown name=README.md
+# ExperienceAgent
 
-A modular Python framework for building, evolving, and deploying **task-oriented experiential agents**. It turns user behavior, interviews, and system interactions into structured, reusable, and evaluable knowledge units called **Experience Packs**, and orchestrates them with an intelligent controller agent.
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8%2B-green.svg)
 
----
+ExperienceAgent 是一个智能经验检索与推荐系统，结合经验库的知识与 GPT 模型的生成能力，为用户提供高质量的经验片段推荐。当经验库中没有相关内容时，系统会自动通过 GPT 生成最佳答案，并将新知识添加回经验库中，实现持续学习和成长。
 
-## 📦 Installation
+## 💡 主要特点
 
+- **智能经验检索**：从经验库中检索相关经验片段
+- **GPT 自动补全**：当经验库无匹配时，自动生成高质量内容
+- **经验库自我增长**：将新生成的经验自动添加到知识库
+- **多种经验片段类型**：支持 WHY、HOW、CHECK 等多种经验片段
+- **聊天式交互界面**：通过自然语言对话进行交互
+- **经验质量评估**：智能评估经验完整度和质量
+
+## 📋 系统要求
+
+- Python 3.8 或更高版本
+- OpenAI API 密钥 / Deepseek API 密钥
+
+## 🔧 安装与设置
+
+1. 克隆仓库
 ```bash
-# Clone the repo
 git clone https://github.com/cccchou/experienceagent.git
 cd experienceagent
-
-# (Optional) create a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
 ```
 
----
-
-## 🔧 Directory Structure
-
-```
-experienceagent/
-├── agents/                          # Custom agent implementations & integrations
-├── controller_agent.py             # Orchestrator: manages module coordination & LLM interactions
-├── goalfylearning.py               # Main pipeline: multimodal input → experience construction → workflow generation
-├── knowledge_graph.py              # KnowledgePoint & ExperienceGraph modeling & storage
-├── fragment_scorer.py              # Evaluates quality and completeness of experience fragments
-├── fragment_recommender.py         # Recommends complementary or similar experience fragments
-├── rich_expert_validation_experience.json  # Sample expert-annotated experience fragment
-├── shuchu.json                     # Example output from execution
-└── readme.md                       # This file
-```
-
----
-
-## 🔁 Core Stages
-
-### Stage 0: Controller Orchestration
-- **Entry point**: `controller_agent.py`
-- Initializes and coordinates all modules:
-  - Launches multimodal input collection
-  - Invokes fragment extraction, scoring, recommendation, and graph construction
-  - Manages feedback loops and re-generation via LLM
-
-### Stage 1: Multimodal Input Collection
-- Sources: interview logs, browser actions, uploaded assets
-- Aggregated into `MultiModalInput` structures
-
-### Stage 2: Knowledge Construction
-- Fragment types:
-  - `WHY` (intent/goals)
-  - `HOW` (actionable steps)
-  - `CHECK` (validation rules)
-- Parsed via LLM calls (e.g., GPT-3.5) into `ExperiencePack`
-
-### Stage 3: Experience Evolution & Evaluation
-- Tracks success/failure feedback to update trust scores
-- LLM-driven generation of new versions with improved reasoning
-
-### Stage 4: Knowledge Graph Generation
-- `KnowledgePoint` types:
-  - `objective`: factual system/page properties
-  - `subjective`: user reasoning or intent
-  - `domain`: reusable domain knowledge
-- `ExperienceGraph` builds and stores relationships among points
-
-### Stage 5: Workflow Generation
-- Matches relevant experiences by task
-- Assembles actionable workflows from `HOW` fragments
-- Visualizes and executes workflows
-
----
-
-## 🧠 Knowledge Graph Module
-
-```python
-from knowledge_graph import KnowledgePoint, ExperienceGraph
-
-kp = KnowledgePoint(kid="K001", content="Click submit button", ktype="objective", url="/submit")
-graph = ExperienceGraph("Exp_T1")
-graph.add_kp(kp)
-```
-
----
-
-## 🚀 Example Usage
-
-Run the full orchestration:
-
+2. 安装依赖
 ```bash
-python controller_agent.py
+pip install -r requirements.txt
 ```
 
-Or invoke only the core pipeline:
+3. 配置 API 密钥
+```bash
+export DEEPSEEK_API_KEY=your_api_key_here
+# 或
+export OPENAI_API_KEY=your_api_key_here
+```
+
+## 🚀 快速开始
+
+### 聊天式交互 (推荐)
+
+运行交互式聊天客户端，通过自然语言进行对话：
 
 ```bash
 python goalfylearning.py
 ```
 
-**Outputs**:
-- Extracted WHY/HOW/CHECK fragments
-- Console visualization of the knowledge graph
-- Workflow execution plan (`shuchu.json`)
+系统会自动：
+- 根据用户输入识别任务需求
+- 从经验库检索相关内容
+- 在经验库无匹配时使用 GPT 生成推荐
+- 智能采纳高质量建议
+- 实时更新到 shuchu.json
 
----
+### 使用自定义经验库
 
-## ⚙️ Configuration
+```bash
+python goalfylearning.py --db my_experiences.json
+```
 
-- Update LLM API keys & endpoints in `controller_agent.py`
-- Customize fragment thresholds in `fragment_scorer.py`
-- Adjust recommendation parameters in `fragment_recommender.py`
+## 📁 项目结构
 
----
+```
+experienceagent/
+├── experienceagent/
+│   ├── __init__.py
+│   ├── fragment_recommender.py  # 核心经验检索和GPT生成模块
+│   ├── fragment_scorer.py       # 经验质量评分模块
+│   ├── controller_agent.py      # 控制层，协调检索和推荐
+├── goalfylearning.py            # 交互式聊天客户端
+├── test_experience_system.py    # 系统测试模块
+├── rich_expert_validation.json  # 经验库
+├── shuchu.json                  # 当前会话输出
+└── requirements.txt
+```
 
-## 📄 License
+## 💎 主要组件
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+### fragment_recommender.py
+
+负责经验检索与智能推荐：
+- `ExperienceRetriever`: 加载和索引经验库
+- `FragmentRecommender`: 推荐相关经验片段
+- `_generate_fragment`: 当经验库无匹配时生成新内容
+
+### controller_agent.py
+
+提供统一的交互接口：
+- `process_user_input`: 处理用户输入并检索相关经验
+- `recommend_fragments`: 推荐经验片段，包括GPT生成补充
+- `enhance_experience`: 提供经验增强建议
+
+### goalfylearning.py
+
+聊天式交互客户端：
+- 智能意图识别
+- 自然语言交互
+- 展示推荐结果
+- 突出显示AI生成内容
+
+## 📝 使用示例
+
+### 示例1：交互式对话
+
+```
+用户: 如何设计一个网页元素自动化验证系统？
+
+系统: 我将为「网页元素自动化验证系统」提供经验推荐。
+由于经验库中没有足够匹配的内容，我已使用AI智能生成了部分推荐。
+
+- WHY类型经验 (2个):
+  1. 来源: AI生成: 网页元素自动化验证系统 (AI智能生成)
+     相似度: 0.85
+     目标: 构建高效稳定的网页元素自动化验证系统...
+
+系统: 我发现一个AI智能生成的WHY片段与您的需求非常匹配，已为您添加到经验中。
+```
+
+### 示例2：经验增强
+
+```
+用户: 增强我的当前经验
+
+系统: 当前经验质量评级: 中
+系统: 我已使用AI智能生成了补充内容，并添加到了经验库中以供未来参考。
+
+系统: 我发现可以进一步增强您的经验:
+  - 缺少CHECK类型片段
+  - WHY片段的约束条件不够具体
+
+系统: 您的经验缺少 CHECK 类型的内容。
+
+系统: 我为您添加了一个AI智能生成的 CHECK 片段。
+```
+
+## 📊 输出格式
+
+系统输出 shuchu.json 格式示例:
+
+```json
+{
+  "task": "网页元素自动化验证系统",
+  "version": 1,
+  "trust_score": 0.5,
+  "fragments": [
+    {
+      "type": "WHY",
+      "data": {
+        "goal": "构建高效稳定的网页元素自动化验证系统",
+        "background": "在大促活动中页面经常变化，需要快速验证",
+        "constraints": ["必须支持多浏览器兼容性", "验证过程要可追溯"],
+        "expected_outcome": "能够及时发现页面元素异常并报警"
+      }
+    },
+    {
+      "type": "HOW",
+      "data": {
+        "steps": [
+          {
+            "page": "配置页",
+            "action": "选择",
+            "element": "目标页面URL",
+            "intent": "指定需要验证的页面"
+          },
+          {
+            "page": "元素管理页",
+            "action": "添加",
+            "element": "监控元素",
+            "intent": "设置需要验证的页面元素"
+          }
+        ]
+      }
+    }
+  ],
+  "workflow_plan": {
+    "steps": [
+      "选择 目标页面URL",
+      "添加 监控元素"
+    ]
+  }
+}
+```
+
+## 🔄 更新日志
+
+**2025-06-22**
+- 🆕 增加了 GPT 自动生成功能，经验库无匹配时智能补充
+- 🔄 优化聊天交互式体验，取消菜单选择模式
+- ✨ 改进经验库索引和检索算法
+- 🔍 增强经验评估和推荐能力
+
+## 👨‍💻 贡献者
+
+- [@cccchou](https://github.com/cccchou)
+
+## 📄 许可
+
+MIT License
+```
+
