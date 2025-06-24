@@ -7,15 +7,15 @@ from typing import Dict, List, Any, Optional, Tuple
 from openai import OpenAI
 import json
 import logging
-from experienceagent.knowledge_graph import KnowledgePoint, ExperienceGraph
-import re
+from experienceagent.knowledge_graph import ExperienceGraph
+# from experienceagent.fragment_recommender import ExperienceFragment
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ExperienceEvaluator")
 
 client = OpenAI(
-)
+    )
 
 def call_openai(prompt: str, system_prompt: str = None, model: str = "deepseek-chat") -> str:
     """调用OpenAI API获取结果"""
@@ -32,47 +32,6 @@ def call_openai(prompt: str, system_prompt: str = None, model: str = "deepseek-c
     return completion.choices[0].message.content
 
 
-# 添加JSON提取函数
-def extract_json_from_text(text: str) -> str:
-    """尝试从文本中提取JSON部分"""
-    # 尝试查找JSON对象格式，通常是 { 开头，} 结尾
-    json_object_match = re.search(r'\{(.*?)\}', text, re.DOTALL)
-    if json_object_match:
-        potential_json = f"{{{json_object_match.group(1)}}}"
-        try:
-            # 验证是否是有效的JSON
-            json.loads(potential_json)
-            return potential_json
-        except:
-            pass
-    
-    # 尝试查找JSON数组格式，通常是 [ 开头，] 结尾
-    json_array_match = re.search(r'\[(.*?)\]', text, re.DOTALL)
-    if json_array_match:
-        potential_json = f"[{json_array_match.group(1)}]"
-        try:
-            # 验证是否是有效的JSON
-            json.loads(potential_json)
-            return potential_json
-        except:
-            pass
-    
-    # 尝试查找整个文本中的JSON对象
-    try:
-        # 查找可能的JSON起始和结束
-        start_idx = text.find("{")
-        end_idx = text.rfind("}")
-        
-        if start_idx != -1 and end_idx != -1:
-            potential_json = text[start_idx:end_idx+1]
-            # 验证是否是有效的JSON
-            json.loads(potential_json)
-            return potential_json
-    except:
-        pass
-    
-    # 如果没有找到有效的JSON，返回原始文本
-    return text
 
 class ExperienceEvaluator:
     """
@@ -223,24 +182,27 @@ class ExperienceEvaluator:
                     
                     # 使用LLM计算相关性
                     prompt = f"""
-请分析下面的片段内容与知识点之间的相关性，返回最相关的知识点ID和相关性分数(0-1之间)。
+                        请分析下面的片段内容与知识点之间的相关性，返回最相关的知识点ID和相关性分数(0-1之间)。
 
-片段内容: {frag_text}
+                        片段内容: {frag_text}
 
-知识点列表:
-{json.dumps(nodes_info, ensure_ascii=False)}
+                        知识点列表:
+                        {json.dumps(nodes_info, ensure_ascii=False)}
 
-返回格式(JSON):
-[
-  {{"id": 知识点ID, "relevance": 相关性分数}},
-  {{"id": 知识点ID, "relevance": 相关性分数}},
-  ...
-]
-只返回相关性大于0.5的结果，按相关性降序排序。
-"""
+                        返回格式(JSON):
+                        [
+                        {{"id": 知识点ID, "relevance": 相关性分数}},
+                        {{"id": 知识点ID, "relevance": 相关性分数}},
+                        ...
+                        ]
+                        只返回相关性大于0.5的结果，按相关性降序排序。
+                        **注意：**
+                        - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+                        - 不要添加额外文字、注释或解释；
+                        - 确保输出可以被 `json.loads()` 直接解析。
+                        """
                     try:
                         response = call_openai(prompt)
-                        response = extract_json_from_text(response)
                         matches = json.loads(response)
                         
                         # 构建结果
@@ -277,40 +239,43 @@ class ExperienceEvaluator:
         
         # 使用LLM进行综合评估
         prompt = f"""
-请作为经验评估专家，评估以下"WHY"类型的经验片段质量。
+                请作为经验评估专家，评估以下"WHY"类型的经验片段质量。
 
-片段内容:
-- 目标: {data.get('goal', '未提供')}
-- 背景: {data.get('background', '未提供')}
-- 约束条件: {', '.join(data.get('constraints', ['未提供']))}
-- 预期效果: {data.get('expected_outcome', '未提供')}
+                片段内容:
+                - 目标: {data.get('goal', '未提供')}
+                - 背景: {data.get('background', '未提供')}
+                - 约束条件: {', '.join(data.get('constraints', ['未提供']))}
+                - 预期效果: {data.get('expected_outcome', '未提供')}
 
-相关知识背景:
-{context_knowledge if context_knowledge else "无相关背景知识"}
+                相关知识背景:
+                {context_knowledge if context_knowledge else "无相关背景知识"}
 
-请从以下维度进行评估(1-10分):
-1. 目标清晰度: 目标描述是否清晰明确
-2. 相关性: 与任务领域的相关程度
-3. 上下文适配度: 与已有知识背景的一致性
-4. 可行性: 目标在约束条件下的可实现程度
+                请从以下维度进行评估(1-10分):
+                1. 目标清晰度: 目标描述是否清晰明确
+                2. 相关性: 与任务领域的相关程度
+                3. 上下文适配度: 与已有知识背景的一致性
+                4. 可行性: 目标在约束条件下的可实现程度
 
-请以JSON格式返回评估结果:
-{{
-  "scores": {{
-    "goal_clarity": 评分,
-    "relevance": 评分,
-    "contextual_fit": 评分,
-    "feasibility": 评分
-  }},
-  "overall_score": 0-1之间的总体评分,
-  "feedback": ["反馈1", "反馈2", ...],
-  "suggestions": ["建议1", "建议2", ...]
-}}
-"""
+                请以JSON格式返回评估结果:
+                {{
+                "scores": {{
+                    "goal_clarity": 评分,
+                    "relevance": 评分,
+                    "contextual_fit": 评分,
+                    "feasibility": 评分
+                }},
+                "overall_score": 0-1之间的总体评分,
+                "feedback": ["反馈1", "反馈2", ...],
+                "suggestions": ["建议1", "建议2", ...]
+                }}
+                **注意：**
+                - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+                - 不要添加额外文字、注释或解释；
+                - 确保输出可以被 `json.loads()` 直接解析。
+                """
         
         try:
             response = call_openai(prompt)
-            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -391,39 +356,42 @@ class ExperienceEvaluator:
         
         # 使用LLM进行综合评估
         prompt = f"""
-请作为经验评估专家，评估以下"HOW"类型的操作步骤质量。
+            请作为经验评估专家，评估以下"HOW"类型的操作步骤质量。
 
-步骤内容:
-{steps_text}
+            步骤内容:
+            {steps_text}
 
-相关操作知识:
-{context_knowledge if context_knowledge else "无相关操作知识"}
+            相关操作知识:
+            {context_knowledge if context_knowledge else "无相关操作知识"}
 
-请从以下维度进行评估(1-10分):
-1. 完整性: 步骤是否涵盖了完整流程
-2. 精确性: 操作描述是否精确
-3. 逻辑流程: 步骤顺序是否合理
-4. 边缘情况处理: 是否考虑了异常情况
-5. 效率: 操作流程是否高效
+            请从以下维度进行评估(1-10分):
+            1. 完整性: 步骤是否涵盖了完整流程
+            2. 精确性: 操作描述是否精确
+            3. 逻辑流程: 步骤顺序是否合理
+            4. 边缘情况处理: 是否考虑了异常情况
+            5. 效率: 操作流程是否高效
 
-请以JSON格式返回评估结果:
-{{
-  "scores": {{
-    "completeness": 评分,
-    "precision": 评分,
-    "logical_flow": 评分,
-    "edge_case_handling": 评分,
-    "efficiency": 评分
-  }},
-  "overall_score": 0-1之间的总体评分,
-  "feedback": ["反馈1", "反馈2", ...],
-  "suggestions": ["建议1", "建议2", ...]
-}}
-"""
+            请以JSON格式返回评估结果:
+            {{
+            "scores": {{
+                "completeness": 评分,
+                "precision": 评分,
+                "logical_flow": 评分,
+                "edge_case_handling": 评分,
+                "efficiency": 评分
+            }},
+            "overall_score": 0-1之间的总体评分,
+            "feedback": ["反馈1", "反馈2", ...],
+            "suggestions": ["建议1", "建议2", ...]
+            }}
+            **注意：**
+            - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+            - 不要添加额外文字、注释或解释；
+            - 确保输出可以被 `json.loads()` 直接解析。
+            """
         
         try:
             response = call_openai(prompt)
-            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -494,37 +462,40 @@ class ExperienceEvaluator:
         
         # 使用LLM进行综合评估
         prompt = f"""
-请作为经验评估专家，评估以下"CHECK"类型的验证规则质量。
+                请作为经验评估专家，评估以下"CHECK"类型的验证规则质量。
 
-规则内容:
-{rules_text}
+                规则内容:
+                {rules_text}
 
-相关验证知识:
-{context_knowledge if context_knowledge else "无相关验证知识"}
+                相关验证知识:
+                {context_knowledge if context_knowledge else "无相关验证知识"}
 
-请从以下维度进行评估(1-10分):
-1. 覆盖面: 规则是否全面覆盖验证需求
-2. 具体性: 规则是否具体明确
-3. 可测试性: 规则是否可验证/测试
-4. 错误处理: 是否考虑了异常情况
+                请从以下维度进行评估(1-10分):
+                1. 覆盖面: 规则是否全面覆盖验证需求
+                2. 具体性: 规则是否具体明确
+                3. 可测试性: 规则是否可验证/测试
+                4. 错误处理: 是否考虑了异常情况
 
-请以JSON格式返回评估结果:
-{{
-  "scores": {{
-    "coverage": 评分,
-    "specificity": 评分,
-    "testability": 评分,
-    "error_handling": 评分
-  }},
-  "overall_score": 0-1之间的总体评分,
-  "feedback": ["反馈1", "反馈2", ...],
-  "suggestions": ["建议1", "建议2", ...]
-}}
-"""
+                请以JSON格式返回评估结果:
+                {{
+                "scores": {{
+                    "coverage": 评分,
+                    "specificity": 评分,
+                    "testability": 评分,
+                    "error_handling": 评分
+                }},
+                "overall_score": 0-1之间的总体评分,
+                "feedback": ["反馈1", "反馈2", ...],
+                "suggestions": ["建议1", "建议2", ...]
+                }}
+                **注意：**
+                - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+                - 不要添加额外文字、注释或解释；
+                - 确保输出可以被 `json.loads()` 直接解析。
+                """
         
         try:
             response = call_openai(prompt)
-            response = extract_json_from_text(response)
             result = json.loads(response)
             
             if "scores" in result:
@@ -578,32 +549,35 @@ class ExperienceEvaluator:
         
         # 使用LLM进行通用评估
         prompt = f"""
-请作为经验评估专家，评估以下经验片段的质量。
+                请作为经验评估专家，评估以下经验片段的质量。
 
-片段内容:
-{content_text}
+                片段内容:
+                {content_text}
 
-请评估此片段的质量，并从以下维度打分(1-10分):
-1. 内容完整性
-2. 相关性
-3. 实用性
+                请评估此片段的质量，并从以下维度打分(1-10分):
+                1. 内容完整性
+                2. 相关性
+                3. 实用性
 
-请以JSON格式返回评估结果:
-{{
-  "scores": {{
-    "completeness": 评分,
-    "relevance": 评分,
-    "usefulness": 评分
-  }},
-  "overall_score": 0-1之间的总体评分,
-  "feedback": ["反馈1", "反馈2"],
-  "suggestions": ["建议1", "建议2"]
-}}
-"""
+                请以JSON格式返回评估结果:
+                {{
+                "scores": {{
+                    "completeness": 评分,
+                    "relevance": 评分,
+                    "usefulness": 评分
+                }},
+                "overall_score": 0-1之间的总体评分,
+                "feedback": ["反馈1", "反馈2"],
+                "suggestions": ["建议1", "建议2"]
+                }}
+                **注意：**
+                - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+                - 不要添加额外文字、注释或解释；
+                - 确保输出可以被 `json.loads()` 直接解析。
+                """
         
         try:
             response = call_openai(prompt)
-            response = extract_json_from_text(response)
             result = json.loads(response)
             
             # 提取评分和反馈
@@ -706,27 +680,30 @@ class ExperienceEvaluator:
                     })
                     
                 summary_prompt = f"""
-请作为经验评估专家，根据以下经验片段的评估结果，生成整体评估总结:
+                    请作为经验评估专家，根据以下经验片段的评估结果，生成整体评估总结:
 
-任务名称: {exp_pack.task_name}
-知识点数量: {kg_size}
-完整度: {completeness_score:.2f} (缺少类型: {', '.join(missing_types) if missing_types else "无"})
+                    任务名称: {exp_pack.task_name}
+                    知识点数量: {kg_size}
+                    完整度: {completeness_score:.2f} (缺少类型: {', '.join(missing_types) if missing_types else "无"})
 
-片段评估结果:
-{json.dumps(fragments_summary, ensure_ascii=False, indent=2)}
+                    片段评估结果:
+                    {json.dumps(fragments_summary, ensure_ascii=False, indent=2)}
 
-请生成一个简短的总结评估，以及3-5条具体的改进建议。
+                    请生成一个简短的总结评估，以及3-5条具体的改进建议。
 
-格式:
-{{
-  "summary": "总体评价...",
-  "quality_level": "高/中/低",
-  "key_strengths": ["优势1", "优势2"],
-  "improvement_suggestions": ["建议1", "建议2", "建议3"]
-}}
-"""
+                    格式:
+                    {{
+                    "summary": "总体评价...",
+                    "quality_level": "高/中/低",
+                    "key_strengths": ["优势1", "优势2"],
+                    "improvement_suggestions": ["建议1", "建议2", "建议3"]
+                    }}
+                    **注意：**
+                    - **只输出纯 JSON**，不要使用任何 ```、```json 或其他代码块标记；
+                    - 不要添加额外文字、注释或解释；
+                    - 确保输出可以被 `json.loads()` 直接解析。
+                    """
                 response = call_openai(summary_prompt)
-                response = extract_json_from_text(response)
                 summary_result = json.loads(response)
                 
                 # 整合最终结果
