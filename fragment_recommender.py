@@ -167,7 +167,7 @@ class ExperienceRetriever:
             logger.info(f"片段内容: {json.dumps(fragment.data, ensure_ascii=False)[:100]}...")
             
             if fragment.frag_type == "WHY":
-                exp_data["why_structured"] = fragment
+                exp_data["why_structured"] = fragment.data
             elif fragment.frag_type == "HOW":
                 behavior_logs = []
                 if 'steps' in fragment.data:
@@ -234,17 +234,20 @@ class ExperienceRetriever:
         语义搜索经验
         
         Args:
-            query_text: 查询文本
+            query_text: 查询文本,为一个任务的task描述
             top_k: 返回结果数量
             
         Returns:
-            相关经验列表
+            相关经验列表:list[Dict]
+            {"experience": match["experience"],
+            "similarity": match["similarity"],
+            "reason": match.get("reason", "")}
         """
         try:
             # 准备候选项
             candidates = []
             for idx, exp in enumerate(self.experience_db):
-                text_repr = self._get_experience_text(exp)
+                text_repr = self._get_experience_task(exp)
                 candidates.append({
                     "id": idx,
                     "text": text_repr,
@@ -274,16 +277,23 @@ class ExperienceRetriever:
         
         Args:
             query: 查询文本
-            candidates: 候选项列表
+            candidates: 候选项列表:list[Dict]
+            {"id": idx,
+            "text": text_repr,
+            "experience": exp}
             top_k: 返回数量
             
         Returns:
-            匹配结果
+            matches:list[Dict]:
+            {"experience": candidates[candidate_id]["experience"],
+            "similarity": similarity,
+            "reason": item.get("reason", "相关内容匹配")}
         """
         # 准备候选项文本
         candidate_texts = []
         for candidate in candidates:
             candidate_texts.append(candidate["text"])
+        logger.info(f'候选集任务为: {candidate_texts}')
         
         # 构建提示词
         prompt = f"""请作为专业的经验检索专家，从候选项中找出与查询最相关的{top_k}个经验:
@@ -293,7 +303,7 @@ class ExperienceRetriever:
         候选经验:
         """
 
-        for i, text in enumerate(candidate_texts[:20]):  # 限制候选项数量
+        for i, text in enumerate(candidate_texts):  # 是否限制候选项数量需要后期迭代提升考虑
             prompt += f"{i+1}. {text}\n\n"
         
         prompt += f"""
@@ -316,12 +326,12 @@ class ExperienceRetriever:
             response = call_openai(prompt)
             
             # 解析结果
-            logger.debug(f"原始模型响应: {response}")
+            # logger.info(f"原始模型响应: {response}")
             try:
                 results = json.loads(response)
+                logger.info(f"原始模型解码后: {response}")
             except json.JSONDecodeError as e:
-                logger.error(f"JSON解析失败: {str(e)}，尝试使用备用方法")
-                results = self._parse_results_manually(response)
+                raise ValueError(f"模型返回的JSON格式错误: {str(e)}\n响应内容: {response}")
             
             if not isinstance(results, list):
                 logger.error(f"模型返回的不是一个列表，而是: {type(results)}")
@@ -344,211 +354,127 @@ class ExperienceRetriever:
             
             # 按相似度排序
             matches.sort(key=lambda x: x["similarity"], reverse=True)
-            
+            # logger.info(f"匹配结果: {matches}")
             # 限制返回数量
             return matches[:top_k]
         except Exception as e:
-            logger.error(f"有效匹配失败: {str(e)}")
-            return self._fallback_text_search(query, candidates)
+            raise ValueError(f"语义匹配失败: {str(e)}\n查询: {query}\n候选项: {candidates}") from e
     
-    # def _parse_results_manually(self, response: str) -> List[Dict]:
-    #     """手动解析模型响应，提取可能的匹配结果"""
-    #     results = []
-    #     response = response.strip()
+    
+    # def _fallback_text_search(self, query: str, candidates = None, top_k: int = 5) -> List[Dict]:
+    #     """简单文本匹配的备用搜索"""
+    #     # 准备查询词
+    #     query_terms = set(term.lower() for term in query.split() if len(term) > 3)
         
-    #     # 如果是JSON格式，尝试修复并解析
-    #     if response.startswith("[") and response.endswith("]"):
-    #         try:
-    #             # 尝试清理和解析JSON
-    #             clean_json = re.sub(r'(\w+):', r'"\1":', response)
-    #             clean_json = clean_json.replace("'", '"')
-    #             return json.loads(clean_json)
-    #         except:
-    #             pass
+    #     matches = []
         
-    #     # 使用正则表达式提取信息
-    #     id_pattern = r'(?:ID|id)[^\d]*(\d+)'
-    #     similarity_pattern = r'(?:相似度|similarity|相关性)[^\d]*([0-9]+\.?[0-9]*)'
-        
-    #     # 按行解析
-    #     lines = response.split('\n')
-    #     current_id = None
-    #     current_similarity = None
-    #     current_reason = ""
-        
-    #     for line in lines:
-    #         line = line.strip()
-    #         if not line:
-    #             # 空行表示一个条目结束
-    #             if current_id is not None:
-    #                 results.append({
-    #                     "id": current_id,
-    #                     "similarity": current_similarity or 0.5,
-    #                     "reason": current_reason or "默认匹配"
+    #     # 如果提供了候选项，使用它们
+    #     if isinstance(candidates, list) and all(isinstance(c, dict) for c in candidates):
+    #         for candidate in candidates:
+    #             # 计算匹配词数
+    #             text = candidate["text"].lower()
+    #             match_count = sum(1 for term in query_terms if term in text)
+                
+    #             # 计算相似度（简单匹配比例）
+    #             similarity = match_count / len(query_terms) if query_terms else 0.1
+                
+    #             if similarity > 0:
+    #                 matches.append({
+    #                     "experience": candidate["experience"],
+    #                     "similarity": min(similarity, 0.9),  # 上限0.9，不要太自信
+    #                     "reason": "文本关键词匹配"
     #                 })
-    #                 current_id = None
-    #                 current_similarity = None
-    #                 current_reason = ""
-    #             continue
-            
-    #         # 提取ID
-    #         id_match = re.search(id_pattern, line)
-    #         if id_match:
-    #             if current_id is not None:
-    #                 # 保存上一个条目
-    #                 results.append({
-    #                     "id": current_id,
-    #                     "similarity": current_similarity or 0.5,
-    #                     "reason": current_reason or "默认匹配"
+    #     else:
+    #         # 如果没有提供候选项，使用整个数据库
+    #         for idx, exp in enumerate(self.experience_db):
+    #             text = self._get_experience_text(exp).lower()
+    #             match_count = sum(1 for term in query_terms if term in text)
+                
+    #             # 计算相似度（简单匹配比例）
+    #             similarity = match_count / len(query_terms) if query_terms else 0.1
+                
+    #             if similarity > 0:
+    #                 matches.append({
+    #                     "experience": exp,
+    #                     "similarity": min(similarity, 0.9),  # 上限0.9，不要太自信
+    #                     "reason": "文本关键词匹配"
     #                 })
-                
-    #             current_id = int(id_match.group(1))
-    #             current_similarity = None
-    #             current_reason = ""
-    #             continue
-                
-    #         # 提取相似度
-    #         similarity_match = re.search(similarity_pattern, line)
-    #         if similarity_match and current_id is not None:
-    #             try:
-    #                 current_similarity = float(similarity_match.group(1))
-    #                 current_similarity = min(1.0, max(0.0, current_similarity))
-    #             except:
-    #                 current_similarity = 0.5
-                
-    #         # 提取原因
-    #         if "原因" in line or "reason" in line or "匹配" in line:
-    #             parts = line.split(":", 1)
-    #             if len(parts) > 1:
-    #                 current_reason = parts[1].strip()
         
-    #     # 添加最后一个条目
-    #     if current_id is not None:
-    #         results.append({
-    #             "id": current_id,
-    #             "similarity": current_similarity or 0.5,
-    #             "reason": current_reason or "默认匹配"
-    #         })
-            
-    #     return results
+    #     # 按相似度排序
+    #     matches.sort(key=lambda x: x["similarity"], reverse=True)
+        
+    #     # 限制返回数量
+    #     return matches[:top_k]
     
-    def _fallback_text_search(self, query: str, candidates = None, top_k: int = 5) -> List[Dict]:
-        """简单文本匹配的备用搜索"""
-        # 准备查询词
-        query_terms = set(term.lower() for term in query.split() if len(term) > 3)
-        
-        matches = []
-        
-        # 如果提供了候选项，使用它们
-        if isinstance(candidates, list) and all(isinstance(c, dict) for c in candidates):
-            for candidate in candidates:
-                # 计算匹配词数
-                text = candidate["text"].lower()
-                match_count = sum(1 for term in query_terms if term in text)
-                
-                # 计算相似度（简单匹配比例）
-                similarity = match_count / len(query_terms) if query_terms else 0.1
-                
-                if similarity > 0:
-                    matches.append({
-                        "experience": candidate["experience"],
-                        "similarity": min(similarity, 0.9),  # 上限0.9，不要太自信
-                        "reason": "文本关键词匹配"
-                    })
-        else:
-            # 如果没有提供候选项，使用整个数据库
-            for idx, exp in enumerate(self.experience_db):
-                text = self._get_experience_text(exp).lower()
-                match_count = sum(1 for term in query_terms if term in text)
-                
-                # 计算相似度（简单匹配比例）
-                similarity = match_count / len(query_terms) if query_terms else 0.1
-                
-                if similarity > 0:
-                    matches.append({
-                        "experience": exp,
-                        "similarity": min(similarity, 0.9),  # 上限0.9，不要太自信
-                        "reason": "文本关键词匹配"
-                    })
-        
-        # 按相似度排序
-        matches.sort(key=lambda x: x["similarity"], reverse=True)
-        
-        # 限制返回数量
-        return matches[:top_k]
-    
-    def _get_experience_text(self, experience: Dict) -> str:
-        """获取经验的文本表示"""
-        parts = []
-        
-        # 构建文本表示
-        if "task_title" in experience:
-            parts.append(f"任务: {experience['task_title']}")
-        
+    def _get_experience_task(self, experience: Dict) -> str:
+        """获取经验的文本的expected_outcome标签，根据expected_outcome去和query进行匹配"""
+        parts = ''
         # WHY部分
         why_data = experience.get("why_structured", {})
         if why_data:
-            parts.append("--- WHY ---")
+            # parts.append("--- WHY ---")
             if "goal" in why_data:
-                parts.append(f"目标: {why_data['goal']}")
-            if "background" in why_data:
-                parts.append(f"背景: {why_data['background']}")
-            if "constraints" in why_data:
-                constraints = why_data["constraints"]
-                if isinstance(constraints, list):
-                    parts.append(f"约束: {', '.join(constraints)}")
-            if "expected_outcome" in why_data:
-                parts.append(f"预期效果: {why_data['expected_outcome']}")
+                parts = why_data['goal']
+        else:
+            raise ValueError("经验中缺少WHY部分,匹配为空")
+            # if "background" in why_data:
+            #     parts.append(f"背景: {why_data['background']}")
+            # if "constraints" in why_data:
+            #     constraints = why_data["constraints"]
+            #     if isinstance(constraints, list):
+            #         parts.append(f"约束: {', '.join(constraints)}")
+            # if "expected_outcome" in why_data:
+            #     parts.append(f"预期效果: {why_data['expected_outcome']}")
         
-        # HOW部分
-        if "how_behavior_logs" in experience:
-            parts.append("\n--- HOW ---")
-            logs = experience["how_behavior_logs"]
-            parts.append(f"步骤数量: {len(logs)}")
+        # # HOW部分
+        # if "how_behavior_logs" in experience:
+        #     parts.append("\n--- HOW ---")
+        #     logs = experience["how_behavior_logs"]
+        #     parts.append(f"步骤数量: {len(logs)}")
             
-            for i, log in enumerate(logs[:3]):  # 只取前3步以简化
-                if isinstance(log, dict):
-                    step_text = f"{i+1}: "
-                    if "action" in log:
-                        step_text += f"{log['action']} "
-                    if "element" in log:
-                        step_text += f"{log['element']} "
-                    if "page" in log:
-                        step_text += f"在 {log['page']} 页面"
-                    if "intent" in log:
-                        step_text += f"，目的是 {log['intent']}"
-                    parts.append(step_text)
+        #     for i, log in enumerate(logs[:3]):  # 只取前3步以简化
+        #         if isinstance(log, dict):
+        #             step_text = f"{i+1}: "
+        #             if "action" in log:
+        #                 step_text += f"{log['action']} "
+        #             if "element" in log:
+        #                 step_text += f"{log['element']} "
+        #             if "page" in log:
+        #                 step_text += f"在 {log['page']} 页面"
+        #             if "intent" in log:
+        #                 step_text += f"，目的是 {log['intent']}"
+        #             parts.append(step_text)
         
-        # CHECK部分
-        if "check_rules" in experience:
-            parts.append("\n--- CHECK ---")
-            rules = experience["check_rules"]
-            parts.append(f"规则数量: {len(rules)}")
+        # # CHECK部分
+        # if "check_rules" in experience:
+        #     parts.append("\n--- CHECK ---")
+        #     rules = experience["check_rules"]
+        #     parts.append(f"规则数量: {len(rules)}")
             
-            for i, rule in enumerate(rules[:3]):  # 只取前3条规则
-                parts.append(f"{i+1}: {rule}")
+        #     for i, rule in enumerate(rules[:3]):  # 只取前3条规则
+        #         parts.append(f"{i+1}: {rule}")
         
-        # 对话日志
-        if "dialogue_logs" in experience:
-            parts.append("\n--- 对话日志 ---")
-            logs = experience["dialogue_logs"]
-            for log in logs[:5]:  # 只取前5条对话
-                parts.append(log)
+        # # 对话日志
+        # if "dialogue_logs" in experience:
+        #     parts.append("\n--- 对话日志 ---")
+        #     logs = experience["dialogue_logs"]
+        #     for log in logs[:5]:  # 只取前5条对话
+        #         parts.append(log)
         
-        # 片段信息
-        if "fragments" in experience:
-            parts.append("\n--- 经验片段 ---")
-            for fragment in experience.get("fragments", []):
-                frag_type = fragment.get("type", "")
-                frag_data = fragment.get("data", {})
-                parts.append(f"\n--- {frag_type} ---")
-                parts.append(json.dumps(frag_data, ensure_ascii=False)[:100])  # 限制长度
+        # # 片段信息
+        # if "fragments" in experience:
+        #     parts.append("\n--- 经验片段 ---")
+        #     for fragment in experience.get("fragments", []):
+        #         frag_type = fragment.get("type", "")
+        #         frag_data = fragment.get("data", {})
+        #         parts.append(f"\n--- {frag_type} ---")
+        #         parts.append(json.dumps(frag_data, ensure_ascii=False)[:100])  # 限制长度
         
-        # 标签
-        if "tags" in experience:
-            parts.append(f"\n标签: {', '.join(experience['tags'])}")
+        # # 标签
+        # if "tags" in experience:
+        #     parts.append(f"\n标签: {', '.join(experience['tags'])}")
             
-        return "\n".join(parts)
+        return parts
     
     def recommend_complementary(self, fragments: List, top_k: int = 2) -> Dict[str, List]:
         """
@@ -586,7 +512,7 @@ class FragmentRecommender:
     """
     
     def __init__(self, retriever: ExperienceRetriever = None, evaluator: ExperienceEvaluator = None, 
-                 db_path: str = None, min_recommendations: int = 2, min_similarity: float = 0.4):
+                 db_path: str = None, min_recommendations: int = 1, min_similarity: float = 0.9):
         """
         初始化推荐器
         
@@ -606,7 +532,7 @@ class FragmentRecommender:
         self.min_recommendations = min_recommendations
         self.min_similarity = min_similarity
     
-    def recommend_for_task(self, task_description: str, existing_fragments: List = None, 
+    def recommend_for_task(self, task_description: str, 
                           dialog_context: list = None) -> Dict[str, List]:
         """
         基于任务描述推荐经验片段
@@ -614,7 +540,6 @@ class FragmentRecommender:
         
         Args:
             task_description: 任务描述
-            existing_fragments: 已有片段列表
             dialog_context: 对话上下文
             
         Returns:
@@ -629,21 +554,23 @@ class FragmentRecommender:
         
         # 查找相似经验
         similar_experiences = self.retriever.semantic_search(
-            task_description, top_k=5
+            task_description, top_k=1
         )
-        
-        # 分析已有片段类型
-        existing_types = set()
-        if existing_fragments:
-            existing_types = set(frag.frag_type for frag in existing_fragments if hasattr(frag, "frag_type"))
-            
+        # logger.info(f'相似经验为{similar_experiences}')
         # 提取全面推荐 - 按片段类型组织
         recommendations = {}
+        recommendations["WHY"] = []
+        recommendations["HOW"] = []
+        recommendations["CHECK"] = []
         fragment_sources = {}  # 追踪片段来源
-        
+        fragment_sources["WHY"] = set()
+        fragment_sources["HOW"] = set()
+        fragment_sources["CHECK"] = set()
+        cnt=0
         for item in similar_experiences:
             exp = item["experience"]
             similarity = item["similarity"]
+            reason = item['reason']
             
             # 跳过低相似度的结果
             if similarity < self.min_similarity:
@@ -652,35 +579,26 @@ class FragmentRecommender:
             # 获取任务名称
             task_name = exp.get("task_title", "")
             if not task_name:
-                task_name = exp.get("task_name", "未命名任务")
+                task_name = task_description
                 
             # 处理rich_expert_validation.json格式
             # 检查WHY类型
-            if "why_structured" in exp and "WHY" not in existing_types:
-                if "WHY" not in recommendations:
-                    recommendations["WHY"] = []
-                    fragment_sources["WHY"] = set()
-                    
-                if task_name not in fragment_sources["WHY"]:
-                    recommendations["WHY"].append({
+            if "why_structured" in exp :
+                recommendations["WHY"].append({
                         "fragment": {
                             "type": "WHY",
                             "data": exp["why_structured"]
                         },
                         "task_name": task_name,
                         "similarity": similarity,
+                        'reason': reason,
                         "source": "database"  # 标记来源为数据库
                     })
-                    fragment_sources["WHY"].add(task_name)
+                fragment_sources["WHY"].add(task_name)
                     
             # 检查HOW类型
-            if "how_behavior_logs" in exp and "HOW" not in existing_types:
-                if "HOW" not in recommendations:
-                    recommendations["HOW"] = []
-                    fragment_sources["HOW"] = set()
-                    
-                if task_name not in fragment_sources["HOW"]:
-                    recommendations["HOW"].append({
+            if "how_behavior_logs" in exp:
+                recommendations["HOW"].append({
                         "fragment": {
                             "type": "HOW",
                             "data": {"steps": exp["how_behavior_logs"]}
@@ -689,49 +607,45 @@ class FragmentRecommender:
                         "similarity": similarity,
                         "source": "database"  # 标记来源为数据库
                     })
-                    fragment_sources["HOW"].add(task_name)
+                fragment_sources["HOW"].add(task_name)
                     
             # 检查CHECK类型
-            if "check_rules" in exp and "CHECK" not in existing_types:
-                if "CHECK" not in recommendations:
-                    recommendations["CHECK"] = []
-                    fragment_sources["CHECK"] = set()
+            if "check_rules" in exp:
+                recommendations["CHECK"].append({
+                    "fragment": {
+                        "type": "CHECK",
+                        "data": {"rules": exp["check_rules"]}
+                    },
+                    "task_name": task_name,
+                    "similarity": similarity,
+                    "source": "database"  # 标记来源为数据库
+                })
+                fragment_sources["CHECK"].add(task_name)
+            cnt+=1
                     
-                if task_name not in fragment_sources["CHECK"]:
-                    recommendations["CHECK"].append({
-                        "fragment": {
-                            "type": "CHECK",
-                            "data": {"rules": exp["check_rules"]}
-                        },
-                        "task_name": task_name,
-                        "similarity": similarity,
-                        "source": "database"  # 标记来源为数据库
-                    })
-                    fragment_sources["CHECK"].add(task_name)
+            # # 兼容fragments格式
+            # if "fragments" in exp:
+            #     for fragment in exp["fragments"]:
+            #         frag_type = fragment.get("type")
                     
-            # 兼容fragments格式
-            if "fragments" in exp:
-                for fragment in exp["fragments"]:
-                    frag_type = fragment.get("type")
-                    
-                    # 跳过已有类型
-                    if frag_type in existing_types:
-                        continue
+            #         # 跳过已有类型
+            #         if frag_type in existing_types:
+            #             continue
                         
-                    # 创建类型条目
-                    if frag_type not in recommendations:
-                        recommendations[frag_type] = []
-                        fragment_sources[frag_type] = set()
+            #         # 创建类型条目
+            #         if frag_type not in recommendations:
+            #             recommendations[frag_type] = []
+            #             fragment_sources[frag_type] = set()
                         
-                    # 避免重复推荐相同经验中的片段
-                    if task_name not in fragment_sources[frag_type]:
-                        recommendations[frag_type].append({
-                            "fragment": fragment,
-                            "task_name": task_name,
-                            "similarity": similarity,
-                            "source": "database"  # 标记来源为数据库
-                        })
-                        fragment_sources[frag_type].add(task_name)
+            #         # 避免重复推荐相同经验中的片段
+            #         if task_name not in fragment_sources[frag_type]:
+            #             recommendations[frag_type].append({
+            #                 "fragment": fragment,
+            #                 "task_name": task_name,
+            #                 "similarity": similarity,
+            #                 "source": "database"  # 标记来源为数据库
+            #             })
+            #             fragment_sources[frag_type].add(task_name)
         
         # 对每种类型的推荐结果排序
         for frag_type in recommendations:
@@ -739,18 +653,15 @@ class FragmentRecommender:
                 key=lambda x: x["similarity"],
                 reverse=True
             )
+        logger.info(f"经验库的推荐结果: {json.dumps(recommendations, ensure_ascii=False, indent=2)}")
             
         # 检查是否需要GPT生成补充推荐
-        needed_types = ["WHY", "HOW", "CHECK"]
-        generated_contents = {}  # 跟踪生成的内容
+        generated_contents = {} # 跟踪生成的内容
         
-        for frag_type in needed_types:
-            # 跳过已有的片段类型
-            if frag_type in existing_types:
-                continue
-                
+        if cnt == 0:
+            logger.info(f"没有找到与任务「{task_description}」相关的经验，将尝试AI生成推荐片段")        
             # 如果某种类型的推荐不足，使用AI生成补充
-            if frag_type not in recommendations or len(recommendations[frag_type]) < self.min_recommendations:
+            for frag_type in ["WHY", "HOW", "CHECK"]:
                 generated_fragments = self._generate_fragment(task_description, frag_type)
                 
                 if generated_fragments:
@@ -997,8 +908,9 @@ class FragmentRecommender:
                         "data": fragment_data
                     },
                     "task_name": f"AI生成: {task_description}",
-                    "similarity": 0.85,  # 给生成内容一个较高的初始相似度
-                    "source": "ai_generated"  # 标记来源为AI生成
+                    "similarity": 1,  # 给生成内容一个较高的初始相似度
+                    "source": "ai_generated",  # 标记来源为AI生成
+                    "reason": "AI生成的推荐片段"
                 }]
                 
                 # 再次验证数据完整性
@@ -1156,10 +1068,10 @@ if __name__ == "__main__":
     recommender = FragmentRecommender(retriever, evaluator)
     
     # 测试推荐
-    task = "开发一个自动化测试系统，用于验证网页界面变化"
-    context = "用户询问如何开发网页界面自动验证"
+    task = "创建一个能够实现双12广告流量数据分析功能网站，响应速度快、平台来源多的网站"
+    context = ["用户询问如何开发网页界面自动验证",'a','b','c']
     
-    result = recommender.recommend_for_task(task, None, context)
+    result = recommender.recommend_for_task(task, context)
     
     # 显示结果
     print(f"=== 推荐 ===")
@@ -1168,7 +1080,7 @@ if __name__ == "__main__":
         print(f"- 任务: {item['fragment']['data']['goal']}")
         print(f"  相似度: {item['similarity']:.2f}")
         print(f"  来源: {'AI生成' if item.get('source') == 'ai_generated' else '经验库'}")
-        print()
+        print(f'  原因: {item.get("reason", "无")}')
     
     # 保存对话
     # recommender.save_dialogue_history()

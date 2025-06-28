@@ -12,6 +12,7 @@ from experienceagent.controller_agent import ControllerAgent
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("ExperienceSystem")
 
+
 client = OpenAI(
     )
 
@@ -79,7 +80,14 @@ def run(db_path: str):
     # 运行智能体
     result = agent.run(answers)
     print(f"执行结果: {result}\n")
-
+    items = result['WHY']
+    print(f"=== 推荐 ===")
+    items = result['WHY']
+    for item in items:
+        print(f"- 任务: {item['fragment']['data']['goal']}")
+        print(f"  相似度: {item['similarity']:.2f}")
+        print(f"  来源: {'AI生成' if item.get('source') == 'ai_generated' else '经验库'}")
+        print(f'  原因: {item.get("reason", "无")}')
     # 保存会话并写入文件
     save_result = agent.save_session(data=result)
     print(f"保存会话结果: {save_result['message']}")

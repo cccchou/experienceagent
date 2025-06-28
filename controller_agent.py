@@ -38,13 +38,14 @@ class ExperiencePack:
         self.task_name = task_name
         self.fragments = []
         # self.version = 1
-        self.trust_score = 0.5  # 默认信任分数
+        # self.trust_score = 0.5  # 默认信任分数
         self.workflow_plan = {"steps": []}  # 添加workflow_plan字段
     
     def add_fragment(self, fragment: ExperienceFragment):
         """添加经验片段"""
         self.fragments.append(fragment)
-        
+        if fragment.frag_type == "WHY":
+            self.trust_score = fragment.data.get('similarity', '')  # 更新信任分数
         # 如果是HOW类型片段，自动提取步骤更新workflow_plan
         if fragment.frag_type == "HOW" and "steps" in fragment.data:
             workflow_steps = []
@@ -73,7 +74,7 @@ class ExperiencePack:
         """转换为字典格式，匹配shuchu.json格式"""
         return {
             "task": self.task_name,
-            # "trust_score": self.trust_score,
+            "trust_score": self.trust_score,
             "fragments": [f.to_dict() for f in self.fragments],
             "workflow_plan": self.workflow_plan
         }
@@ -86,7 +87,7 @@ class ControllerAgent:
     """
     
     def __init__(self, db_path: str = "rich_expert_validation.json", min_recommendations: int = 2, 
-                min_similarity: float = 0.4):
+                min_similarity: float = 0.89):
         """
         初始化智能体控制器
         
@@ -152,7 +153,7 @@ class ControllerAgent:
         
         # 根据用户输入寻找相关经验
         search_query = self.current_task
-        result = self.recommender.recommend_for_task(search_query, None, user_input)
+        result = self.recommender.recommend_for_task(search_query, user_input)
         return result
         
     
@@ -197,7 +198,8 @@ class ControllerAgent:
                 "goal": temp.get("goal", ""),
                 "background": temp.get("background", ""),
                 "constraints": temp.get("constraints", []),
-                "expected_outcome": temp.get("expected_outcome", "")
+                "expected_outcome": temp.get("expected_outcome", ""),
+                "similarity": data[0].get("similarity", ''),
             }
         elif frag_type == "HOW":
             # 确保HOW片段有steps字段，且格式正确
