@@ -1,0 +1,456 @@
+{
+  "knowledge_nodes": {
+    "kn157c2f3f": {
+      "knowledge_id": "kn157c2f3f",
+      "experience_id": "experience_001",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": null,
+      "system_ids": [
+        "system_元素抽取页",
+        "system_验证页"
+      ],
+      "page_ids": [
+        "元素抽取页",
+        "验证页"
+      ],
+      "domain_ids": [
+        "analytics",
+        "testing",
+        "marketing",
+        "frontend"
+      ],
+      "created_at": "2025-07-02T09:35:08.558128+00:00",
+      "updated_at": "2025-07-02T09:35:08.558128+00:00",
+      "content": "目标: 建立一套可用于页面变化验证与行为分析的营销页面经验框架",
+      "metadata": {
+        "type": "goal",
+        "source": "why_structured"
+      }
+    },
+    "knae24c449": {
+      "knowledge_id": "knae24c449",
+      "experience_id": "experience_001",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": null,
+      "system_ids": [
+        "system_元素抽取页",
+        "system_验证页"
+      ],
+      "page_ids": [
+        "元素抽取页",
+        "验证页"
+      ],
+      "domain_ids": [
+        "analytics",
+        "testing",
+        "marketing",
+        "frontend"
+      ],
+      "created_at": "2025-07-02T09:35:08.558156+00:00",
+      "updated_at": "2025-07-02T09:35:08.558156+00:00",
+      "content": "背景: 在大促场景中，页面元素频繁变化，测试覆盖不全影响活动上线",
+      "metadata": {
+        "type": "background",
+        "source": "why_structured"
+      }
+    },
+    "kn42d411d5": {
+      "knowledge_id": "kn42d411d5",
+      "experience_id": "experience_001",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_1",
+      "system_ids": [
+        "system_元素抽取页",
+        "system_验证页"
+      ],
+      "page_ids": [
+        "元素抽取页"
+      ],
+      "domain_ids": [
+        "analytics",
+        "testing",
+        "marketing",
+        "frontend"
+      ],
+      "created_at": "2025-07-02T09:35:08.558170+00:00",
+      "updated_at": "2025-07-02T09:35:08.558170+00:00",
+      "content": "操作: 点击 结构化提取按钮 - 提取页面HTML中的元素信息",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 0,
+        "action": "点击",
+        "element": "结构化提取按钮",
+        "intent": "提取页面HTML中的元素信息"
+      }
+    },
+    "kn7fd1af12": {
+      "knowledge_id": "kn7fd1af12",
+      "experience_id": "experience_001",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_2",
+      "system_ids": [
+        "system_元素抽取页",
+        "system_验证页"
+      ],
+      "page_ids": [
+        "验证页"
+      ],
+      "domain_ids": [
+        "analytics",
+        "testing",
+        "marketing",
+        "frontend"
+      ],
+      "created_at": "2025-07-02T09:35:08.558182+00:00",
+      "updated_at": "2025-07-02T09:35:08.558182+00:00",
+      "content": "操作: 填写 测试数据输入框 - 填写拟合后的页面参数进行验证",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 1,
+        "action": "填写",
+        "element": "测试数据输入框",
+        "intent": "填写拟合后的页面参数进行验证"
+      }
+    },
+    "knd4159b00": {
+      "knowledge_id": "knd4159b00",
+      "experience_id": "experience_001",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_3",
+      "system_ids": [
+        "system_元素抽取页",
+        "system_验证页"
+      ],
+      "page_ids": [
+        "验证页"
+      ],
+      "domain_ids": [
+        "analytics",
+        "testing",
+        "marketing",
+        "frontend"
+      ],
+      "created_at": "2025-07-02T09:35:08.558191+00:00",
+      "updated_at": "2025-07-02T09:35:08.558191+00:00",
+      "content": "操作: 点击 开始验证按钮 - 执行自动回放流程",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 2,
+        "action": "点击",
+        "element": "开始验证按钮",
+        "intent": "执行自动回放流程"
+      }
+    },
+    "kn1caf58a5": {
+      "knowledge_id": "kn1caf58a5",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": null,
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "结算页面",
+        "产品页面",
+        "购物车页面",
+        "登录页面",
+        "首页"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559253+00:00",
+      "updated_at": "2025-07-02T09:35:08.559253+00:00",
+      "content": "目标: 实现网页自动化测试以提高测试效率和准确性",
+      "metadata": {
+        "type": "goal",
+        "source": "why_structured"
+      }
+    },
+    "knd4f327d1": {
+      "knowledge_id": "knd4f327d1",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": null,
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "结算页面",
+        "产品页面",
+        "购物车页面",
+        "登录页面",
+        "首页"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559266+00:00",
+      "updated_at": "2025-07-02T09:35:08.559266+00:00",
+      "content": "背景: 随着Web应用的复杂性增加，手动测试已无法满足快速迭代和质量保证的需求，自动化测试成为提升开发效率和软件质量的必要手段",
+      "metadata": {
+        "type": "background",
+        "source": "why_structured"
+      }
+    },
+    "kna663ae6e": {
+      "knowledge_id": "kna663ae6e",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_1",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "登录页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559275+00:00",
+      "updated_at": "2025-07-02T09:35:08.559275+00:00",
+      "content": "操作: 输入 用户名输入框 - 输入有效的用户名",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 0,
+        "action": "输入",
+        "element": "用户名输入框",
+        "intent": "输入有效的用户名"
+      }
+    },
+    "kn2d150ce6": {
+      "knowledge_id": "kn2d150ce6",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_2",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "登录页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559283+00:00",
+      "updated_at": "2025-07-02T09:35:08.559283+00:00",
+      "content": "操作: 输入 密码输入框 - 输入有效的密码",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 1,
+        "action": "输入",
+        "element": "密码输入框",
+        "intent": "输入有效的密码"
+      }
+    },
+    "kncb1f3f05": {
+      "knowledge_id": "kncb1f3f05",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_3",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "登录页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559289+00:00",
+      "updated_at": "2025-07-02T09:35:08.559289+00:00",
+      "content": "操作: 点击 登录按钮 - 提交登录信息",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 2,
+        "action": "点击",
+        "element": "登录按钮",
+        "intent": "提交登录信息"
+      }
+    },
+    "kncbcd10ee": {
+      "knowledge_id": "kncbcd10ee",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_4",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "首页"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559295+00:00",
+      "updated_at": "2025-07-02T09:35:08.559295+00:00",
+      "content": "操作: 验证 欢迎消息 - 确认登录成功",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 3,
+        "action": "验证",
+        "element": "欢迎消息",
+        "intent": "确认登录成功"
+      }
+    },
+    "kn11b5cd76": {
+      "knowledge_id": "kn11b5cd76",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_5",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "产品页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559301+00:00",
+      "updated_at": "2025-07-02T09:35:08.559301+00:00",
+      "content": "操作: 点击 添加购物车按钮 - 将产品加入购物车",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 4,
+        "action": "点击",
+        "element": "添加购物车按钮",
+        "intent": "将产品加入购物车"
+      }
+    },
+    "knecf5e9da": {
+      "knowledge_id": "knecf5e9da",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_6",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "购物车页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559307+00:00",
+      "updated_at": "2025-07-02T09:35:08.559307+00:00",
+      "content": "操作: 验证 产品列表 - 确认产品已添加到购物车",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 5,
+        "action": "验证",
+        "element": "产品列表",
+        "intent": "确认产品已添加到购物车"
+      }
+    },
+    "kn7849d493": {
+      "knowledge_id": "kn7849d493",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_7",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "购物车页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559313+00:00",
+      "updated_at": "2025-07-02T09:35:08.559313+00:00",
+      "content": "操作: 点击 结算按钮 - 进入结算流程",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 6,
+        "action": "点击",
+        "element": "结算按钮",
+        "intent": "进入结算流程"
+      }
+    },
+    "knc9ccc272": {
+      "knowledge_id": "knc9ccc272",
+      "experience_id": "experience_002",
+      "extracted_subjective_knowledge_id": null,
+      "operation_steps_id": "step_8",
+      "system_ids": [
+        "system_产品页面",
+        "system_登录页面",
+        "system_购物车页面",
+        "system_首页",
+        "system_结算页面"
+      ],
+      "page_ids": [
+        "结算页面"
+      ],
+      "domain_ids": [
+        "testing"
+      ],
+      "created_at": "2025-07-02T09:35:08.559319+00:00",
+      "updated_at": "2025-07-02T09:35:08.559319+00:00",
+      "content": "操作: 验证 订单总价 - 确认订单金额正确",
+      "metadata": {
+        "type": "behavior",
+        "source": "how_behavior_logs",
+        "step_index": 7,
+        "action": "验证",
+        "element": "订单总价",
+        "intent": "确认订单金额正确"
+      }
+    }
+  },
+  "statistics": {
+    "total_knowledge_nodes": 15,
+    "experiences_count": 2,
+    "systems_count": 7,
+    "pages_count": 7,
+    "domains_count": 4,
+    "content_keywords": 37
+  }
+}

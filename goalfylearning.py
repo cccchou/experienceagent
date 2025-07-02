@@ -93,6 +93,8 @@ def run(db_path: str):
     print(f"保存会话结果: {save_result['message']}")
     agent.save_to_file()
     print("已保存到 shuchu.json")
+    result = agent.enhance_knowledge(force_rebuild=True)
+    print(f"知识图谱增强结果: {result['message']}")
 
     # 结束提示
     input("\n所有操作已完成，按回车键退出程序。")
