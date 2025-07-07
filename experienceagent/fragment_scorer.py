@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from openai import OpenAI
 import json
 import logging
-from experienceagent.knowledge_graph import ExperienceGraph
+from experienceagent.knowledage import ExperienceGraph
 # from experienceagent.fragment_recommender import ExperienceFragment
 
 # 配置日志

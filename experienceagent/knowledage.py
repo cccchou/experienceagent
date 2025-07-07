@@ -463,3 +463,7 @@ def load_knowledge_graph(file_path: str) -> Optional[KnowledgeGraph]:
     except Exception as e:
         logger.error(f"加载知识图谱失败: {str(e)}")
         return None
+
+
+# Alias for compatibility
+ExperienceGraph = KnowledgeGraph
