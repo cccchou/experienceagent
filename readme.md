@@ -1,8 +1,30 @@
-# 🧠 ExperienceAgent: GoalFy Learning Framework
+# 🧠 ExperienceAgent: GoalFy Learning Framework with AFlow Dynamic Workflow
+
 ---
-A modular Python framework for building, evolving, and deploying **task-oriented experiential agents**. 
-It focuses on turning user behavior, interviews, and system interactions into structured, reusable, and evaluable knowledge units called **Experience Packs**.
+A modular Python framework for building, evolving, and deploying **task-oriented experiential agents** with **intelligent adaptive conversation capabilities**. 
+It focuses on turning user behavior, interviews, and system interactions into structured, reusable, and evaluable knowledge units called **Experience Packs**, now enhanced with AFlow dynamic workflow for superior user interaction.
 ---
+
+## 🚀 New: AFlow Dynamic Workflow System
+
+**Revolutionary conversation experience** that transforms static Q&A into intelligent, adaptive dialogues:
+
+### 🎯 Key Improvements
+- **🤖 Intelligent Question Generation**: LLM-powered questions that adapt to user responses
+- **🏷️ Domain-Aware Conversations**: Automatically detects task domain (web automation, API development, etc.)
+- **🔄 Context-Driven Flow**: Each question builds on previous answers for deeper understanding
+- **📊 Quality-Based Termination**: Stops when sufficient information is gathered, not after fixed count
+- **⚡ Backward Compatible**: Seamlessly works with existing ControllerAgent and experience systems
+
+### 📈 Comparison: Traditional vs AFlow Dynamic
+
+| Traditional Fixed Q&A | AFlow Dynamic Workflow |
+|----------------------|------------------------|
+| 4 fixed questions always | 3-8 adaptive questions |
+| Generic, domain-agnostic | Domain-specific, contextual |
+| No follow-up logic | Intelligent follow-up based on answers |
+| One-size-fits-all | Personalized conversation experience |
+| Surface-level information | Deep requirement understanding |
 
 
 ## 💡 主要特点
@@ -41,25 +63,35 @@ export OPENAI_API_KEY=your_api_key_here
 
 ## 🚀 快速开始
 
-### 聊天式交互 (推荐)
+### 🤖 智能对话模式 (推荐)
 
-运行交互式聊天客户端，通过自然语言进行对话：
+使用全新的AFlow动态工作流进行智能对话：
 
 ```bash
 python goalfylearning.py
 ```
 
-系统会自动：
-- 根据用户输入识别任务需求
-- 从经验库检索相关内容
-- 在经验库无匹配时使用 GPT 生成推荐
-- 智能采纳高质量建议
-- 实时更新到 shuchu.json
+**智能特性:**
+- 🧠 自动识别任务领域 (网页自动化、API开发、数据处理等)
+- 🎯 基于回答生成针对性后续问题
+- 📊 智能判断何时收集到足够信息
+- 🔄 上下文感知的对话流程
+- 💡 生成更详细、准确的任务描述
 
-### 使用自定义经验库
+### 📋 传统问答模式
+
+如需使用原始的4个固定问题：
 
 ```bash
-python goalfylearning.py --db my_experiences.json
+python goalfylearning.py --mode fixed
+# 或者
+python goalfylearning.py --disable-dynamic
+```
+
+### 🛠️ 使用自定义经验库
+
+```bash
+python goalfylearning.py --db_path my_experiences.json
 ```
 
 ## 📁 项目结构
@@ -68,10 +100,16 @@ python goalfylearning.py --db my_experiences.json
 experienceagent/
 ├── experienceagent/
 │   ├── __init__.py
+│   ├── aflow_workflow.py         # 🆕 AFlow动态工作流系统
 │   ├── fragment_recommender.py  # 核心经验检索和GPT生成模块
 │   ├── fragment_scorer.py       # 经验质量评分模块
 │   ├── controller_agent.py      # 控制层，协调检索和推荐
-├── goalfylearning.py            # 交互式聊天客户端
+│   └── knowledage.py            # 知识图谱管理
+├── goalfylearning.py            # 🆕 增强版交互式聊天客户端 (支持AFlow)
+├── goalfylearning_aflow.py      # 🆕 独立的AFlow客户端实现
+├── test_aflow_workflow.py       # 🆕 AFlow系统测试
+├── test_integration.py          # 🆕 集成测试
+├── demo_aflow_system.py         # 🆕 系统演示脚本
 ├── test_experience_system.py    # 系统测试模块
 ├── rich_expert_validation.json  # 经验库
 ├── shuchu.json                  # 当前会话输出
@@ -79,6 +117,24 @@ experienceagent/
 ```
 
 ## 💎 主要组件
+
+### aflow_workflow.py 🆕
+
+**AFlow动态工作流系统** - 智能对话的核心：
+
+- `ConversationContext`: 管理对话状态、历史和领域信息
+- `DynamicQuestionNode`: 基于上下文生成自适应问题的LLM驱动节点
+- `DomainAnalysisNode`: 识别任务领域和用户技术背景
+- `ConversationDecisionNode`: 智能决策是否继续对话
+- `WorkflowSummaryNode`: 将对话综合为详细任务描述
+- `ConversationWorkflow`: 编排整个对话流程与条件分支
+
+**核心特性:**
+- 🧠 基于LLM的智能问题生成
+- 🏷️ 自动领域识别 (web自动化、测试、API开发等)
+- 🔄 上下文感知的对话分支
+- 📊 基于信息质量的智能终止
+- ⚡ 无缝向后兼容
 
 ### fragment_recommender.py
 
@@ -94,17 +150,95 @@ experienceagent/
 - `recommend_fragments`: 推荐经验片段，包括GPT生成补充
 - `enhance_experience`: 提供经验增强建议
 
-### goalfylearning.py
+### goalfylearning.py 🆕
 
-聊天式交互客户端：
-- 智能意图识别
-- 自然语言交互
-- 展示推荐结果
-- 突出显示AI生成内容
+**增强版聊天式交互客户端:**
+- 🤖 集成AFlow智能对话系统
+- 📋 支持传统问答模式作为备选
+- 🎨 美化的用户界面与进度提示
+- ⚙️ 灵活的配置选项
+- 🔧 命令行参数支持
 
 ## 📝 使用示例
 
-### 示例1：交互式对话
+### 示例1：AFlow智能对话 🆕
+
+```bash
+$ python goalfylearning.py
+
+====== GoalFy Learning Experience Agent ======
+欢迎使用GoalFy学习体验智能体!
+🚀 启动AFlow智能对话系统...
+
+====== AFlow Dynamic Conversation Workflow ======
+欢迎使用智能对话系统！我将通过动态问答深入了解您的需求。
+
+[问题 1]
+请告诉我您想要完成什么任务或目标？
+> I want to create automated web testing for an e-commerce site
+
+[问题 2]  
+您希望自动化测试哪些具体的网页操作？比如表单填写、页面导航、或者数据验证？
+> Mainly shopping cart functionality and checkout process
+
+[问题 3]
+在购物车和结账流程测试中，您最关心验证哪些方面？比如商品添加、价格计算、还是支付验证？
+> Payment validation and inventory updates after purchase
+
+🎯 动态工作流生成的任务描述: Create automated web testing system for e-commerce shopping cart and checkout process with focus on payment validation and inventory management
+
+📊 对话统计: 3 个问题
+🏷️ 识别领域: web_automation  
+📋 任务类型: e-commerce_testing
+```
+
+### 示例2：传统问答模式
+
+```bash
+$ python goalfylearning.py --mode fixed
+
+====== GoalFy Learning Experience Agent ======
+欢迎使用GoalFy学习体验智能体!
+📋 使用传统固定问答模式...
+
+[问题 1]
+请问你的目标是什么?
+> Web testing automation
+
+[问题 2] 
+你为什么需要这个功能?
+> Reduce manual testing time
+
+[问题 3]
+有哪些限制条件我们要考虑?
+> Must work with Chrome browser
+
+[问题 4]
+你希望最终达到什么样的效果?
+> Generate detailed test reports
+
+📝 传统模式生成的任务描述: Create web testing automation to reduce manual testing time with Chrome browser and detailed test reports
+```
+
+### 示例3：程序化调用 🆕
+
+```python
+from experienceagent.aflow_workflow import ConversationWorkflow
+from goalfylearning import AdaptiveGoalFyAgent
+
+# 使用AFlow工作流
+workflow = ConversationWorkflow()
+result = workflow.run()
+
+print(f"Task: {result['task_description']}")
+print(f"Domain: {result['context_state']['domain_info']}")
+
+# 使用增强版代理
+agent = AdaptiveGoalFyAgent(use_dynamic_workflow=True)
+complete_result = agent.run_complete_session()
+```
+
+### 示例4：传统交互式对话
 
 ```
 用户: 如何设计一个网页元素自动化验证系统？
@@ -120,7 +254,7 @@ experienceagent/
 系统: 我发现一个AI智能生成的WHY片段与您的需求非常匹配，已为您添加到经验中。
 ```
 
-### 示例2：经验增强
+### 示例5：经验增强
 
 ```
 用户: 增强我的当前经验
@@ -185,7 +319,41 @@ experienceagent/
 }
 ```
 
+## 🧪 测试与演示
+
+### 运行AFlow系统测试
+
+```bash
+# 测试AFlow工作流组件
+python test_aflow_workflow.py
+
+# 测试系统集成
+python test_integration.py
+
+# 查看完整演示
+python demo_aflow_system.py
+```
+
+### 性能对比测试
+
+运行演示脚本查看传统模式与AFlow动态工作流的详细对比。
+
 ## 🔄 更新日志
+
+### v2.0.0 - AFlow Dynamic Workflow 🆕
+- ✨ 新增AFlow动态工作流系统
+- 🤖 智能问题生成与领域识别
+- 🔄 上下文感知的对话流程
+- 📊 基于质量的智能对话终止
+- 🎨 增强的用户界面与体验
+- ⚡ 完全向后兼容现有系统
+- 🧪 完整的测试套件与演示
+
+### v1.x - 传统问答系统
+- 📋 固定的4问题模式
+- 📚 经验库检索与推荐
+- 🤖 GPT生成补充功能
+- 🧠 知识图谱管理
 
 **2025-06-22**
 - 🆕 增加了 GPT 自动生成功能，经验库无匹配时智能补充
